@@ -17,7 +17,6 @@ namespace SaveCloud
 
         private async void btnConnect_Click(object sender, EventArgs e)
         {
-            btnConnect.Enabled = false;
             lstSaves.Items.Clear();
             lstSaves.Items.Add("Connecting...");
 
@@ -55,10 +54,6 @@ namespace SaveCloud
                 lstSaves.Items.Clear();
                 MessageBox.Show("Error: " + ex.Message, "Connection Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
-            finally
-            {
-                btnConnect.Enabled = true;
-            }
         }
 
         private async void btnSaves_Click(object sender, EventArgs e)
@@ -68,7 +63,7 @@ namespace SaveCloud
                 MessageBox.Show("Connect first to load paths.", "No Paths", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
-            extractObject.SearchFolders(lstFiles, cloud.Paths);  
+            extractObject.SearchThroughPaths(lstFiles, cloud.Paths);  
         }
 
         private async void btnUpload_Click(object sender, EventArgs e)
@@ -85,7 +80,6 @@ namespace SaveCloud
                 return;
             }
 
-            btnUpload.Enabled = false;
             lstSaves.Items.Add("Uploading...");
 
             try
@@ -128,13 +122,23 @@ namespace SaveCloud
             {
                 MessageBox.Show("Upload failed: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
-            finally
-            {
-                btnUpload.Enabled = true;
-            }
+        }
+
+        private void btnAddGame_Click(object sender, EventArgs e)
+        {
+            extractObject.AddExtraGame(lstFiles);
+        }
+
+        private void btnAddPath_Click(object sender, EventArgs e)
+        {
+            //cloud.AddExtraPath();
         }
 
         //TODO 
-        // - add functionality to add the following: paths, games, save file paths
+        // - add functionality to add the following: paths, save file paths
+        // - make sure every save would go back exactly to where it was found
+        // - load the saves back from the server
+        // - automate the game detection + save upload processes
+        // - try to make the app a process (with low resource consumption) that starts on windows and detects if a game save has been changed
     }
 }
