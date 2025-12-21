@@ -15,7 +15,7 @@ namespace SaveCloud
     {
         public List<GameSaveInfo> Games { get; private set; } = new List<GameSaveInfo>();
 
-        public void AddExtraGame(ListBox lstFiles)
+        public async Task AddExtraGame(ListBox lstFiles)
         {
             using (FolderBrowserDialog folderDialog = new FolderBrowserDialog())
             {
@@ -27,11 +27,11 @@ namespace SaveCloud
                     string selectedPath = folderDialog.SelectedPath;
                     DirectoryInfo selectedDir = new DirectoryInfo(selectedPath);
 
-                    VerifyGames(selectedDir, lstFiles);
+                    await VerifyGames(selectedDir, lstFiles);
                 }
             }
         }
-        public async void SearchThroughPaths(ListBox lstFiles, List<string> paths)
+        public async Task SearchThroughPaths(ListBox lstFiles, List<string> paths)
         {
             foreach (String path in paths)
             {
@@ -40,12 +40,12 @@ namespace SaveCloud
 
                 foreach (DirectoryInfo gameDir in baseSaveDir.GetDirectories())
                 {
-                    VerifyGames(gameDir, lstFiles);
+                    await VerifyGames(gameDir, lstFiles);
                 }
             }
         }
 
-        public async void VerifyGames(DirectoryInfo gameDir, ListBox lstFiles)
+        public async Task VerifyGames(DirectoryInfo gameDir, ListBox lstFiles)
         {
             bool isGame = await IsRealGame(gameDir.Name);
 
@@ -95,18 +95,17 @@ namespace SaveCloud
                 if (bestMatch != null)
                 {
                     gameInfo.SaveFiles = bestMatch.GetFiles("*", SearchOption.AllDirectories).ToList();
-                    lstFiles.Items.Add($"Game: {gameDir.Name} - Save Folder: {bestMatch.FullName}");
+                    Logger.LogGameFound(gameDir.Name, bestMatch.FullName, gameInfo.SaveFiles.Count);
                 }
                 else
                 {
-                    lstFiles.Items.Add($"Game: {gameDir.Name} - No save folder found");
+                    Logger.LogGameNoSaves(gameDir.Name);
                 }
 
                 Games.Add(gameInfo);
             }
             catch (Exception ex)
             {
-                lstFiles.Items.Add($"Game: {gameDir.Name} - Error: {ex.Message}");
             }
         }
 
