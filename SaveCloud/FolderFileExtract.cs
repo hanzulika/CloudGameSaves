@@ -14,30 +14,55 @@ namespace SaveCloud
     internal class FolderFileExtract
     {
         public List<GameSaveInfo> Games { get; private set; } = new List<GameSaveInfo>();
-        public async void SearchFolders(ListBox lstFiles, List<string> paths)
+
+        public async Task AddExtraGame(ListBox lstFiles)
         {
-            DirectoryInfo baseSaveDir = new DirectoryInfo(@paths[0]);
-            DirectoryInfo[] saveDirList = baseSaveDir.GetDirectories();
-
-            foreach (DirectoryInfo gameDir in baseSaveDir.GetDirectories())
+            using (FolderBrowserDialog folderDialog = new FolderBrowserDialog())
             {
-                bool isGame = await IsRealGame(gameDir.Name);
+                folderDialog.Description = "Select a game save folder";
+                folderDialog.ShowNewFolderButton = false;
 
-                if (!isGame)
+                if (folderDialog.ShowDialog() == DialogResult.OK)
                 {
-                    foreach (DirectoryInfo subDir in gameDir.GetDirectories())
+                    string selectedPath = folderDialog.SelectedPath;
+                    DirectoryInfo selectedDir = new DirectoryInfo(selectedPath);
+
+                    await VerifyGames(selectedDir, lstFiles);
+                }
+            }
+        }
+        public async Task SearchThroughPaths(ListBox lstFiles, List<string> paths)
+        {
+            foreach (String path in paths)
+            {
+                DirectoryInfo baseSaveDir = new DirectoryInfo(path);
+                DirectoryInfo[] saveDirList = baseSaveDir.GetDirectories();
+
+                foreach (DirectoryInfo gameDir in baseSaveDir.GetDirectories())
+                {
+                    await VerifyGames(gameDir, lstFiles);
+                }
+            }
+        }
+
+        public async Task VerifyGames(DirectoryInfo gameDir, ListBox lstFiles)
+        {
+            bool isGame = await IsRealGame(gameDir.Name);
+
+            if (!isGame)
+            {
+                foreach (DirectoryInfo subDir in gameDir.GetDirectories())
+                {
+                    bool isSubGame = await IsRealGame(subDir.Name);
+                    if (isSubGame)
                     {
-                        bool isSubGame = await IsRealGame(subDir.Name);
-                        if (isSubGame)
-                        {
-                            ExtractFiles(subDir, lstFiles);
-                        }
+                        ExtractFiles(subDir, lstFiles);
                     }
                 }
-                else
-                {
-                    ExtractFiles(gameDir, lstFiles);
-                }
+            }
+            else
+            {
+                ExtractFiles(gameDir, lstFiles);
             }
         }
         private void ExtractFiles(DirectoryInfo gameDir, ListBox lstFiles)
@@ -70,18 +95,17 @@ namespace SaveCloud
                 if (bestMatch != null)
                 {
                     gameInfo.SaveFiles = bestMatch.GetFiles("*", SearchOption.AllDirectories).ToList();
-                    lstFiles.Items.Add($"Game: {gameDir.Name} - Save Folder: {bestMatch.FullName}");
+                    Logger.LogGameFound(gameDir.Name, bestMatch.FullName, gameInfo.SaveFiles.Count);
                 }
                 else
                 {
-                    lstFiles.Items.Add($"Game: {gameDir.Name} - No save folder found");
+                    Logger.LogGameNoSaves(gameDir.Name);
                 }
 
                 Games.Add(gameInfo);
             }
             catch (Exception ex)
             {
-                lstFiles.Items.Add($"Game: {gameDir.Name} - Error: {ex.Message}");
             }
         }
 
@@ -93,7 +117,7 @@ namespace SaveCloud
                 "Install", "Update", "Launcher", "Engine", "System", "Dumps",
                 "ShareX", "Arduino", "My Games", "Electronic Arts", "Rockstar Games",
                 "Templates", "Visual Studio 2022", "Visual Studio 18", "Code Snippets", "Libraries", "Visualizers",
-                "Backup", "Screenshots", "Scripts", "Social Club"
+                "Backup", "Screenshots", "Scripts", "Social Club", "Mono"
             };
 
             if (bannedNames.Any(b => b.Equals(folderName, StringComparison.OrdinalIgnoreCase)))
@@ -106,7 +130,7 @@ namespace SaveCloud
             string cleanName = SplitCamelCase(folderName);
 
             string apiKey = Env.Get("RAWG_API_KEY");
-            string url = $"https://api.rawg.io/api/games?key={apiKey}&search={folderName}&page_size=1";
+            string url = $"https://api.rawg.io/api/games?key={apiKey}&search={cleanName}&page_size=1";
 
             using (HttpClient client = new HttpClient())
             {
@@ -119,7 +143,7 @@ namespace SaveCloud
                     if (json["results"].HasValues)
                     {
                         string apiName = json["results"][0]["name"].ToString();
-                        Console.WriteLine("Actual folder: " + folderName + " | Game name: " + apiName);
+                        Console.WriteLine("Actual folder: " + cleanName + " | Game name: " + apiName);
                         if (IsNameSimilar(cleanName, apiName))
                         {
                             return true;

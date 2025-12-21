@@ -61,6 +61,11 @@ namespace SaveCloud
             remotePath = Env.Get("SAVECLOUD_REMOTE_PATH");
         }
 
+        //public async Task<bool> AddExtraPath()
+        //{
+
+        //}
+
         public async Task<bool> GetSavePathsAsync()
         {
             Paths.Clear();
