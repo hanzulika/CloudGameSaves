@@ -31,11 +31,11 @@
             this.components = new System.ComponentModel.Container();
             this.btnConnect = new System.Windows.Forms.Button();
             this.contextMenuStrip1 = new System.Windows.Forms.ContextMenuStrip(this.components);
-            this.txtbPassword = new System.Windows.Forms.TextBox();
             this.lstSaves = new System.Windows.Forms.ListBox();
             this.backgroundWorker1 = new System.ComponentModel.BackgroundWorker();
             this.btnSaves = new System.Windows.Forms.Button();
             this.lstFiles = new System.Windows.Forms.ListBox();
+            this.btnUpload = new System.Windows.Forms.Button();
             this.SuspendLayout();
             // 
             // btnConnect
@@ -54,14 +54,6 @@
             this.contextMenuStrip1.Name = "contextMenuStrip1";
             this.contextMenuStrip1.Size = new System.Drawing.Size(61, 4);
             // 
-            // txtbPassword
-            // 
-            this.txtbPassword.Location = new System.Drawing.Point(127, 12);
-            this.txtbPassword.Name = "txtbPassword";
-            this.txtbPassword.PasswordChar = '*';
-            this.txtbPassword.Size = new System.Drawing.Size(100, 22);
-            this.txtbPassword.TabIndex = 2;
-            // 
             // lstSaves
             // 
             this.lstSaves.FormattingEnabled = true;
@@ -69,7 +61,7 @@
             this.lstSaves.Location = new System.Drawing.Point(12, 78);
             this.lstSaves.Name = "lstSaves";
             this.lstSaves.ScrollAlwaysVisible = true;
-            this.lstSaves.Size = new System.Drawing.Size(186, 164);
+            this.lstSaves.Size = new System.Drawing.Size(571, 292);
             this.lstSaves.TabIndex = 3;
             // 
             // btnSaves
@@ -87,26 +79,35 @@
             this.lstFiles.FormattingEnabled = true;
             this.lstFiles.HorizontalScrollbar = true;
             this.lstFiles.ItemHeight = 16;
-            this.lstFiles.Location = new System.Drawing.Point(317, 78);
+            this.lstFiles.Location = new System.Drawing.Point(714, 50);
             this.lstFiles.Name = "lstFiles";
             this.lstFiles.ScrollAlwaysVisible = true;
             this.lstFiles.Size = new System.Drawing.Size(414, 292);
             this.lstFiles.TabIndex = 5;
             // 
+            // btnUpload
+            // 
+            this.btnUpload.Location = new System.Drawing.Point(146, 9);
+            this.btnUpload.Name = "btnUpload";
+            this.btnUpload.Size = new System.Drawing.Size(75, 31);
+            this.btnUpload.TabIndex = 6;
+            this.btnUpload.Text = "Upload";
+            this.btnUpload.UseVisualStyleBackColor = true;
+            this.btnUpload.Click += new System.EventHandler(this.btnUpload_Click);
+            // 
             // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 16F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(800, 450);
+            this.ClientSize = new System.Drawing.Size(1168, 450);
+            this.Controls.Add(this.btnUpload);
             this.Controls.Add(this.lstFiles);
             this.Controls.Add(this.btnSaves);
             this.Controls.Add(this.lstSaves);
-            this.Controls.Add(this.txtbPassword);
             this.Controls.Add(this.btnConnect);
             this.Name = "Form1";
             this.Text = "Form1";
             this.ResumeLayout(false);
-            this.PerformLayout();
 
         }
 
@@ -114,11 +115,11 @@
 
         private System.Windows.Forms.Button btnConnect;
         private System.Windows.Forms.ContextMenuStrip contextMenuStrip1;
-        private System.Windows.Forms.TextBox txtbPassword;
         private System.Windows.Forms.ListBox lstSaves;
         private System.ComponentModel.BackgroundWorker backgroundWorker1;
         private System.Windows.Forms.Button btnSaves;
         private System.Windows.Forms.ListBox lstFiles;
+        private System.Windows.Forms.Button btnUpload;
     }
 }
 
