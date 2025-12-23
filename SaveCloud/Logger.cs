@@ -50,13 +50,13 @@ namespace SaveCloud
         public static void LogSaves(bool success, Cloud cloud)
         {
             Log("Reading saves...");
-            if (!success || cloud.FileNames.Count == 0)
+            if (!success || cloud.RemoteFiles.Count == 0)
             {
                 LogWarning("No saves found");
             }
             else
             {
-                foreach (var fileName in cloud.FileNames)
+                foreach (var fileName in cloud.RemoteFiles)
                 {
                     LogInfo($"Found: {fileName}");
                 }

@@ -39,6 +39,7 @@
             this.savesToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.loadingSpinner = new System.Windows.Forms.PictureBox();
             this.progressLabel = new System.Windows.Forms.Label();
+            this.addGamesPathToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.menuStrip1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.loadingSpinner)).BeginInit();
             this.SuspendLayout();
@@ -73,14 +74,15 @@
             // connectToolStripMenuItem
             // 
             this.connectToolStripMenuItem.Name = "connectToolStripMenuItem";
-            this.connectToolStripMenuItem.Size = new System.Drawing.Size(141, 26);
+            this.connectToolStripMenuItem.Size = new System.Drawing.Size(224, 26);
             this.connectToolStripMenuItem.Text = "Refresh";
             this.connectToolStripMenuItem.Click += new System.EventHandler(this.btnConnect_Click);
             // 
             // scanGamesToolStripMenuItem
             // 
             this.scanGamesToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
-            this.addGameToolStripMenuItem});
+            this.addGameToolStripMenuItem,
+            this.addGamesPathToolStripMenuItem});
             this.scanGamesToolStripMenuItem.Name = "scanGamesToolStripMenuItem";
             this.scanGamesToolStripMenuItem.Size = new System.Drawing.Size(68, 24);
             this.scanGamesToolStripMenuItem.Text = "Games";
@@ -88,7 +90,7 @@
             // addGameToolStripMenuItem
             // 
             this.addGameToolStripMenuItem.Name = "addGameToolStripMenuItem";
-            this.addGameToolStripMenuItem.Size = new System.Drawing.Size(163, 26);
+            this.addGameToolStripMenuItem.Size = new System.Drawing.Size(224, 26);
             this.addGameToolStripMenuItem.Text = "Add Game";
             this.addGameToolStripMenuItem.Click += new System.EventHandler(this.btnAddGame_Click);
             // 
@@ -116,6 +118,13 @@
             this.progressLabel.Name = "progressLabel";
             this.progressLabel.Size = new System.Drawing.Size(0, 16);
             this.progressLabel.TabIndex = 11;
+            // 
+            // addGamesPathToolStripMenuItem
+            // 
+            this.addGamesPathToolStripMenuItem.Name = "addGamesPathToolStripMenuItem";
+            this.addGamesPathToolStripMenuItem.Size = new System.Drawing.Size(224, 26);
+            this.addGamesPathToolStripMenuItem.Text = "Add Games Path";
+            this.addGamesPathToolStripMenuItem.Click += new System.EventHandler(this.btnAddPath_Click);
             // 
             // Form1
             // 
@@ -146,6 +155,7 @@
         private System.Windows.Forms.ToolStripMenuItem savesToolStripMenuItem;
         private System.Windows.Forms.PictureBox loadingSpinner;
         private System.Windows.Forms.Label progressLabel;
+        private System.Windows.Forms.ToolStripMenuItem addGamesPathToolStripMenuItem;
     }
 }
 
