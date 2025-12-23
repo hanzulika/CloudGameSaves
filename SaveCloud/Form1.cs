@@ -8,7 +8,6 @@ namespace SaveCloud
         FolderFileExtract extractObject = new FolderFileExtract();
         Cloud cloud = new Cloud();
         Upload upload = new Upload();
-        //Logger logger = new Logger();
 
         public Form1()
         {
@@ -43,7 +42,7 @@ namespace SaveCloud
                 return;
             }
             progressLabel.Text = "Finding games";
-            await extractObject.SearchThroughPaths(lstFiles, cloud.Paths);
+            await extractObject.SearchThroughPaths(cloud.Paths);
 
             if (!cloud.Client.IsConnected)
             {
@@ -76,17 +75,22 @@ namespace SaveCloud
 
         private async void btnAddGame_Click(object sender, EventArgs e)
         {
-            await extractObject.AddExtraGame(lstFiles);
+            await extractObject.AddExtraGame();
+            var result = await upload.UploadGames(cloud.Client, cloud.RemotePath, extractObject.Games);
+            Logger.LogUpload(result);
         }
 
-        private void btnAddPath_Click(object sender, EventArgs e)
+        private async void btnAddPath_Click(object sender, EventArgs e)
         {
-            //cloud.AddExtraPath();
+            bool result = await cloud.AddExtraPath();
         }
+
+        //ISSUES
+        // - some logs seem flawed
 
         //TODO 
-        // - add functionality to add the following: paths, save file paths
-        // - make sure every save would go back exactly to where it was found
+        // - add functionality to add the following: game paths (a new form with a browse button), save file paths 
+        // - make sure every save would go back exactly to where it was found from the save down
         // - load the saves back from the server
         // - automate the game detection + save upload processes
         // - try to make the app a process (with low resource consumption) that starts on windows and detects if a game save has been changed

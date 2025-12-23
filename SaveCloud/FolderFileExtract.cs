@@ -15,7 +15,7 @@ namespace SaveCloud
     {
         public List<GameSaveInfo> Games { get; private set; } = new List<GameSaveInfo>();
 
-        public async Task AddExtraGame(ListBox lstFiles)
+        public async Task AddExtraGame()
         {
             using (FolderBrowserDialog folderDialog = new FolderBrowserDialog())
             {
@@ -27,12 +27,14 @@ namespace SaveCloud
                     string selectedPath = folderDialog.SelectedPath;
                     DirectoryInfo selectedDir = new DirectoryInfo(selectedPath);
 
-                    await VerifyGames(selectedDir, lstFiles);
+                    await VerifyGames(selectedDir);
                 }
             }
         }
-        public async Task SearchThroughPaths(ListBox lstFiles, List<string> paths)
+        public async Task SearchThroughPaths(List<string> paths)
         {
+            Games.Clear();
+
             foreach (String path in paths)
             {
                 DirectoryInfo baseSaveDir = new DirectoryInfo(path);
@@ -40,12 +42,13 @@ namespace SaveCloud
 
                 foreach (DirectoryInfo gameDir in baseSaveDir.GetDirectories())
                 {
-                    await VerifyGames(gameDir, lstFiles);
+                    await VerifyGames(gameDir);
                 }
             }
+            Logger.LogInfo($"Search complete. Found {Games.Count} games.");
         }
 
-        public async Task VerifyGames(DirectoryInfo gameDir, ListBox lstFiles)
+        public async Task VerifyGames(DirectoryInfo gameDir)
         {
             bool isGame = await IsRealGame(gameDir.Name);
 
@@ -56,19 +59,25 @@ namespace SaveCloud
                     bool isSubGame = await IsRealGame(subDir.Name);
                     if (isSubGame)
                     {
-                        ExtractFiles(subDir, lstFiles);
+                        ExtractFiles(subDir);
                     }
                 }
             }
             else
             {
-                ExtractFiles(gameDir, lstFiles);
+                ExtractFiles(gameDir);
             }
         }
-        private void ExtractFiles(DirectoryInfo gameDir, ListBox lstFiles)
+        private void ExtractFiles(DirectoryInfo gameDir)
         {
             try
             {
+                if (Games.Any(g => g.GameName.Equals(gameDir.Name, StringComparison.OrdinalIgnoreCase)))
+                {
+                    Logger.LogInfo($"Skipping duplicate: {gameDir.Name}");
+                    return;
+                }
+
                 var matchedFolder = gameDir.GetDirectories("*save*", SearchOption.AllDirectories);
 
                 // prioritize folders named "Saves" or "Save"
@@ -240,7 +249,21 @@ namespace SaveCloud
 
         private string SplitCamelCase(string input)
         {
-            return Regex.Replace(input, "(\\B[A-Z])", " $1").Trim();
+            if (string.IsNullOrEmpty(input))
+                return input;
+
+            int upperCount = input.Count(char.IsUpper);
+            int letterCount = input.Count(char.IsLetter);
+            if(letterCount > 0 && (double) upperCount / letterCount > 0.7)
+            {
+                return input;
+            }
+
+            string result = Regex.Replace(input, "([a-z])([A-Z])", "$1 $2");
+
+            result = Regex.Replace(result, "([A-Z]+)([A-Z][a-z])", "$1 $2");
+
+            return result.Trim();
         }
     }
 }

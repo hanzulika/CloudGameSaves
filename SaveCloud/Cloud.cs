@@ -15,7 +15,7 @@ namespace SaveCloud
         private SftpClient sftp;
 
         public List<string> Paths { get; private set; } = new List<string>();
-        public List<string> FileNames { get; private set; } = new List<string>();
+        public List<string> RemoteFiles { get; private set; } = new List<string>();
 
         public SftpClient Client => sftp;
         public string RemotePath => remotePath;
@@ -61,15 +61,51 @@ namespace SaveCloud
             remotePath = Env.Get("SAVECLOUD_REMOTE_PATH");
         }
 
-        //public async Task<bool> AddExtraPath()
-        //{
+        public async Task<bool> AddExtraPath()
+        {
+            try
+            {
+                using (var pathsForm = new GamesPathForm(Paths))
+                {
+                    if (pathsForm.ShowDialog() != System.Windows.Forms.DialogResult.OK)
+                        return false;
 
-        //}
+                    Paths.Clear();
+                    Paths.AddRange(pathsForm.Paths);
+                }
+
+                await Task.Run(() =>
+                {
+                    if (!sftp.IsConnected)
+                        throw new InvalidOperationException("Server unreachable");
+
+                    string pathsFile = remotePath + "/paths.txt";
+
+                    using (var stream = sftp.Create(pathsFile))
+                    using (var writer = new StreamWriter(stream))
+                    {
+                        foreach (var path in Paths)
+                        {
+                            writer.WriteLine(path);
+                        }
+                    }
+                });
+
+                Logger.LogInfo($"Saved {Paths.Count} paths to server");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError($"Failed to update paths: {ex.Message}");
+                return false;
+            }
+        }
+
 
         public async Task<bool> GetSavePathsAsync()
         {
             Paths.Clear();
-            FileNames.Clear();
+            RemoteFiles.Clear();
 
             try
             {
@@ -95,7 +131,7 @@ namespace SaveCloud
                                 }
                             }
                         }
-                        FileNames.Add(item.Name);
+                        RemoteFiles.Add(item.Name);
                     }
                 });
 
