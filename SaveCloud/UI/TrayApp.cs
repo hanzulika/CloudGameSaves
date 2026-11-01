@@ -165,14 +165,16 @@ namespace SaveCloud.UI
             }
         }
 
-        private void Rescan()
+        private void Rescan() => Rescan(false);
+
+        private void Rescan(bool deep)
         {
             if (_manifest.Count == 0) return;
             _scanning = true;
             PushState();
             try
             {
-                var env = WindowsEnvironment.Build(_config);
+                var env = WindowsEnvironment.Build(_config, forceSearch: deep);
                 _scanner = new GameScanner(env, _config);
                 if (_engine == null)
                 {
@@ -359,7 +361,34 @@ namespace SaveCloud.UI
                     ["localBytes"] = sk.Bytes,
                 });
             }
-            var suggestions = (_engine?.LastScan.Suggestions ?? new List<SaveSuggestion>()).Select(x => new
+            var scanNow = _engine?.LastScan;
+            foreach (var ig in scanNow?.InstalledWithoutSaves ?? new List<InstalledGame>())
+            {
+                if (synced.Contains(ig.Name) || (_config.IgnoredGames ?? new List<string>()).Contains(ig.Name)) continue;
+                games.Add(new Dictionary<string, object>
+                {
+                    ["name"] = ig.Name,
+                    ["steamId"] = ig.SteamId,
+                    ["kind"] = "noSaves",
+                    ["message"] = "Installed, but its saves weren't found",
+                    ["installPath"] = ig.Paths.FirstOrDefault(),
+                });
+            }
+            var hiddenTemplates = new HashSet<string>(_config.HiddenSuggestions ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+            var suggestionFolders = (scanNow?.Suggestions ?? new List<SaveSuggestion>()).Select(x => x.Folder).ToList();
+            var unknownGames = (scanNow?.UnknownGameFolders ?? new List<InstallCandidate>())
+                .Where(u => _scanner != null && !hiddenTemplates.Contains(_scanner.Paths.ToTemplate(u.Path)))
+                // A save folder already suggested inside this game folder covers it.
+                .Where(u => !suggestionFolders.Any(f => f.StartsWith(u.Path.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase)))
+                .Select(u => new
+                {
+                    name = u.Hints.FirstOrDefault() ?? u.DisplayName ?? Path.GetFileName(u.Path),
+                    folder = u.Path,
+                    template = _scanner.Paths.ToTemplate(u.Path),
+                    source = u.Source,
+                })
+                .ToList();
+            var suggestions = (scanNow?.Suggestions ?? new List<SaveSuggestion>()).Select(x => new
             {
                 name = x.Name, folder = x.Folder, template = x.Template, files = x.Files, bytes = x.Bytes,
                 newestUtc = x.NewestUtc == DateTime.MinValue ? (DateTime?)null : x.NewestUtc, source = x.Source,
@@ -386,6 +415,7 @@ namespace SaveCloud.UI
                 },
                 games,
                 suggestions,
+                unknownGames,
             };
         }
 
@@ -457,7 +487,7 @@ namespace SaveCloud.UI
                 case "syncNow": Enqueue("Syncing", () => { if (_connState != "connected") Discover(); FullSync(); }); break;
                 case "syncGame": Enqueue($"Syncing {game}", () => SyncOne(game)); break;
                 case "retry": Enqueue("Connecting", () => { Discover(); if (_connState == "connected") FullSync(); }); break;
-                case "rescan": Enqueue("Looking for games", () => { Rescan(); FullSync(); }); break;
+                case "rescan": Enqueue("Searching all drives for games", () => { Rescan(deep: true); FullSync(); }); break;
                 case "resolve":
                     bool keepLocal = (bool)msg["keepLocal"];
                     Enqueue(keepLocal ? $"Uploading {game}" : $"Restoring {game}", () =>
@@ -490,6 +520,7 @@ namespace SaveCloud.UI
                     break;
                 case "addRoot": AddRoot(); break;
                 case "addGame": AddGameFromFolder(((string)msg["name"] ?? "").Trim()); break;
+                case "chooseSaveFolder": AddGameFromFolder(((string)msg["game"] ?? "").Trim(), (string)msg["startIn"]); break;
                 case "addSuggestion":
                     AddCustom(((string)msg["name"] ?? "").Trim(), (string)msg["template"]);
                     break;
@@ -568,10 +599,15 @@ namespace SaveCloud.UI
             }
         }
 
-        private void AddGameFromFolder(string name)
+        private void AddGameFromFolder(string name, string startIn = null)
         {
-            using (var d = new FolderBrowserDialog { Description = "Choose the folder where this game keeps its saves", ShowNewFolderButton = false })
+            using (var d = new FolderBrowserDialog
             {
+                Description = string.IsNullOrEmpty(name) ? "Choose the folder where this game keeps its saves" : $"Choose the folder where {name} keeps its saves",
+                ShowNewFolderButton = false,
+            })
+            {
+                if (!string.IsNullOrEmpty(startIn) && Directory.Exists(startIn)) d.SelectedPath = startIn;
                 if (d.ShowDialog(_window) != DialogResult.OK) return;
                 if (_scanner == null) { Toast("Still loading, try again in a moment"); return; }
                 AddCustom(string.IsNullOrWhiteSpace(name) ? Path.GetFileName(d.SelectedPath) : name, _scanner.Paths.ToTemplate(d.SelectedPath));

@@ -41,6 +41,12 @@ namespace SaveCloud.Core.Scan
         /// <summary>Launcher it was installed with (steam, epic, gog, origin, uplay), or null if unknown.</summary>
         public string Store { get; set; }
         public string Source { get; set; }
+        /// <summary>Steam app id read from the folder (steam_appid.txt), when present: identifies the game exactly.</summary>
+        public long? SteamAppId { get; set; }
+        /// <summary>More candidate names from the folder's metadata (GOG info, Unity app.info, exe product name).</summary>
+        public List<string> Hints { get; set; } = new List<string>();
+        /// <summary>Found by the drive-wide game folder search (has an engine/SDK footprint, so it's surely a game).</summary>
+        public bool IsGameFolder { get; set; }
         public override string ToString() => $"{DisplayName} -> {Path} ({Source}{(Store == null ? "" : ", " + Store)})";
     }
 

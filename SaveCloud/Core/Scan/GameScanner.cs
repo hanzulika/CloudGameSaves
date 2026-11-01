@@ -45,6 +45,17 @@ namespace SaveCloud.Core.Scan
         public List<SkippedGame> SkippedGames { get; } = new List<SkippedGame>();
         /// <summary>Folders that look like game saves but belong to no known game (offered to the user to add).</summary>
         public List<SaveSuggestion> Suggestions { get; } = new List<SaveSuggestion>();
+        /// <summary>Known games that are installed here but whose saves weren't found (the user can point at them).</summary>
+        public List<InstalledGame> InstalledWithoutSaves { get; } = new List<InstalledGame>();
+        /// <summary>Game folders (engine/SDK footprint) that match no known game.</summary>
+        public List<InstallCandidate> UnknownGameFolders { get; } = new List<InstallCandidate>();
+    }
+
+    public class InstalledGame
+    {
+        public string Name { get; set; }
+        public long? SteamId { get; set; }
+        public List<string> Paths { get; set; } = new List<string>();
     }
 
     /// <summary>Finds installed games and their save files using the Ludusavi manifest plus the user's own games.</summary>
@@ -138,6 +149,19 @@ namespace SaveCloud.Core.Scan
 
             _owners = ResolveSharedFiles(result.Games);
             result.Games.RemoveAll(g => g.Files.Count == 0);
+
+            // Installed but no saves found: show them, so the user can point at the saves instead of wondering.
+            var accounted = new HashSet<string>(result.Games.Select(g => g.Name).Concat(result.SkippedGames.Select(g => g.Name)), StringComparer.Ordinal);
+            var byName = manifest.GroupBy(g => g.Name).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+            foreach (var kv in installs)
+            {
+                if (accounted.Contains(kv.Key) || ignored.Contains(kv.Key)) continue;
+                byName.TryGetValue(kv.Key, out var mg);
+                result.InstalledWithoutSaves.Add(new InstalledGame { Name = kv.Key, SteamId = mg?.SteamId, Paths = kv.Value });
+            }
+            var matchedPaths = new HashSet<string>(installs.Values.SelectMany(v => v), _env.Comparer);
+            foreach (var c in _env.Installs.Where(c => c.IsGameFolder && !matchedPaths.Contains(c.Path)))
+                result.UnknownGameFolders.Add(c);
 
             try
             {
@@ -303,18 +327,37 @@ namespace SaveCloud.Core.Scan
                         foreach (var g in games) Found(g, sub, root.Store);
             }
 
+            var bySteamId = new Dictionary<long, List<ManifestGame>>();
+            foreach (var g in manifest)
+                if (g.SteamId.HasValue) Add(bySteamId, g.SteamId.Value, g);
+
             foreach (var c in _env.Installs)
             {
                 if (string.IsNullOrEmpty(c.Path)) continue;
                 string dir = c.Path.TrimEnd('\\', '/');
-                bool matched = false;
+
+                // Most reliable first: the Steam app id the game ships with, then its folder name, then its names.
+                if (c.SteamAppId.HasValue && bySteamId.TryGetValue(c.SteamAppId.Value, out var byId))
+                {
+                    foreach (var g in byId) Found(g, dir, c.Store);
+                    continue;
+                }
                 if (byDir.TryGetValue(Path.GetFileName(dir), out var games))
                 {
                     foreach (var g in games) Found(g, dir, c.Store);
-                    matched = true;
+                    continue;
                 }
-                if (!matched && !string.IsNullOrEmpty(c.DisplayName))
-                    foreach (var g in MatchByName(c.DisplayName, byName, sortedNames)) Found(g, dir, c.Store);
+                var names = new List<string>();
+                if (!string.IsNullOrEmpty(c.DisplayName)) names.Add(c.DisplayName);
+                names.AddRange(c.Hints ?? new List<string>());
+                names.Add(GameFolderFinder.Clean(Path.GetFileName(dir)));
+                foreach (var n in names.Concat(names.Select(GameFolderFinder.Clean)).Distinct())
+                {
+                    var hits = MatchByName(n, byName, sortedNames).ToList();
+                    if (hits.Count == 0) continue;
+                    foreach (var g in hits) Found(g, dir, c.Store);
+                    break;
+                }
             }
             return found;
         }

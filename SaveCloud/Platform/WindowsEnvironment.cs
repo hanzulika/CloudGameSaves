@@ -15,7 +15,7 @@ namespace SaveCloud.Platform
     /// <summary>Works out what the manifest placeholders and game libraries are on this Windows PC.</summary>
     public static class WindowsEnvironment
     {
-        public static PathEnvironment Build(AppConfig config)
+        public static PathEnvironment Build(AppConfig config, bool forceSearch = false)
         {
             var env = new PathEnvironment { IgnoreCase = true, OsUserName = Environment.UserName };
 
@@ -38,13 +38,7 @@ namespace SaveCloud.Platform
             AddUbisoft(env);
             AddInstalledPrograms(env);
             AddShortcuts(env);
-
-            foreach (var pf in new[]
-            {
-                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
-            })
-                AddRoot(env, pf, RootKind.Plain);
+            AddGameFolders(env, config, forceSearch);
 
             foreach (var drive in SafeDrives())
                 foreach (var name in new[] { "Games", "Program Files\\EA Games", "Program Files (x86)\\Ubisoft\\Ubisoft Game Launcher\\games" })
@@ -158,6 +152,39 @@ namespace SaveCloud.Platform
                 }
             }
             catch (Exception ex) when (ex is System.Security.SecurityException || ex is UnauthorizedAccessException || ex is IOException) { }
+        }
+
+        private static List<FoundGameFolder> _found;
+        private static DateTime _foundAt;
+        private static readonly object FoundLock = new object();
+
+        /// <summary>
+        /// Searches every fixed drive (and the user's extra folders) for game folders, wherever they are. Cached for
+        /// 30 minutes; the periodic checks reuse it and "Rescan" forces a fresh search.
+        /// </summary>
+        private static void AddGameFolders(PathEnvironment env, AppConfig config, bool force)
+        {
+            List<FoundGameFolder> found;
+            lock (FoundLock)
+            {
+                if (force || _found == null || DateTime.UtcNow - _foundAt > TimeSpan.FromMinutes(30))
+                {
+                    var starts = SafeDrives().Concat(config.ExtraRoots ?? new List<string>()).ToList();
+                    _found = new GameFolderFinder().Find(starts);
+                    _foundAt = DateTime.UtcNow;
+                }
+                found = _found;
+            }
+            foreach (var g in found)
+            {
+                int before = env.Installs.Count;
+                AddInstall(env, g.Path, g.Names.FirstOrDefault(), null, "game folder (" + g.Signature + ")");
+                var c = env.Installs.FirstOrDefault(i => string.Equals(i.Path, g.Path.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase));
+                if (c == null) continue;
+                c.IsGameFolder = true;
+                c.SteamAppId = c.SteamAppId ?? g.SteamAppId;
+                foreach (var n in g.Names) if (!c.Hints.Contains(n)) c.Hints.Add(n);
+            }
         }
 
         private static void AddEa(PathEnvironment env)
