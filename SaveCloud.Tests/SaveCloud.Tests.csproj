@@ -2,7 +2,9 @@
 
   <!-- Tests run on .NET 8 (any OS) against the platform-independent Core code of the app. -->
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFrameworks>net8.0</TargetFrameworks>
+    <!-- On Windows also run everything on .NET Framework 4.8.1, the runtime the app actually ships on. -->
+    <TargetFrameworks Condition="'$(OS)' == 'Windows_NT'">net8.0;net481</TargetFrameworks>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <IsPackable>false</IsPackable>
@@ -11,6 +13,11 @@
 
   <ItemGroup>
     <Compile Include="..\SaveCloud\Core\**\*.cs" Link="Core\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net481'">
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.Net.Http" />
   </ItemGroup>
 
   <ItemGroup>
