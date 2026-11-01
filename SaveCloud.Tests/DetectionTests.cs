@@ -129,8 +129,8 @@ namespace SaveCloud.Tests
             pc.Write("winLocalAppData", "GlimpseGame/Saved/SaveGames/slot0.sav", "unreal");
             pc.Write("winDocuments", "Taxes/2025.pdf", "noise");
             pc.Write("winAppData", "Discord/saves/x.json", "app data, not a game");
-            string emu = pc.Dir("Emulators", "shadPS4");
-            pc.Write("home", "../../Emulators/shadPS4/user/savedata/1/CUSA00900/slot", "bloodborne");
+            string emu = pc.Dir("Steam", "steamapps", "common", "Emulators", "shadPS4"); // ancestors named like apps must not matter
+            File.WriteAllText(Path.Combine(pc.Dir("Steam", "steamapps", "common", "Emulators", "shadPS4", "user", "savedata", "1", "CUSA00900"), "slot"), "bloodborne");
             pc.Env.Installs.Add(new InstallCandidate { Path = emu, DisplayName = "Bloodborne", Source = "shortcut" });
 
             var s = pc.Rescan().Suggestions;

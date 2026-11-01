@@ -255,9 +255,10 @@ namespace SaveCloud.Core.Scan
         {
             string win = Folder("winDir");
             if (win != null && IsInside(path, win)) return true;
+            // Only the program's own folder name counts: games legitimately live under ...\\Steam\\steamapps\\common\\,
+            // %LocalAppData%\\Programs\\ and similar, so ancestors must not disqualify a path.
             return path.IndexOf("\\Common Files", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                   NotGames.Any(n => path.IndexOf("\\" + n + "\\", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                                     path.EndsWith("\\" + n, StringComparison.OrdinalIgnoreCase));
+                   NotGames.Contains(Path.GetFileName(path.TrimEnd('\\', '/')));
         }
 
         private string Folder(string token) => _env.Folders.TryGetValue(token, out var f) && Directory.Exists(f) ? f : null;
