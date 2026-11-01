@@ -11,7 +11,7 @@ using System.Windows.Forms;
 
 namespace SaveCloud.UI
 {
-    /// <summary>The main window: hosts the HTML interface in ui\ through WebView2.</summary>
+    /// <summary>The main window: hosts the HTML interface in web\ through WebView2.</summary>
     public sealed class MainWindow : Form
     {
         private const string HostName = "app.savecloud";
@@ -47,7 +47,7 @@ namespace SaveCloud.UI
                 core.Settings.AreDefaultContextMenusEnabled = false;
                 core.Settings.IsStatusBarEnabled = false;
                 core.Settings.IsZoomControlEnabled = false;
-                core.SetVirtualHostNameToFolderMapping(HostName, Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ui"),
+                core.SetVirtualHostNameToFolderMapping(HostName, Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "web"),
                                                        CoreWebView2HostResourceAccessKind.DenyCors);
                 core.WebMessageReceived += (s, e) =>
                 {

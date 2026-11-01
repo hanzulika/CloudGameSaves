@@ -108,14 +108,14 @@ namespace SaveCloud.Tests
         }
 
         [Fact]
-        public void Probe_ReportsIdentityAndMode_AndConflictsSurfaceAsExceptions()
+        public async System.Threading.Tasks.Task Probe_ReportsIdentityAndMode_AndConflictsSurfaceAsExceptions()
         {
             if (!Enabled) return;
-            var info = HttpStore.ProbeAsync(_url, TimeSpan.FromSeconds(5)).Result;
+            var info = await HttpStore.ProbeAsync(_url, TimeSpan.FromSeconds(5));
             Assert.True(info.Authorized);
             Assert.Equal("tester@example.com", info.Login);
             Assert.Equal("shared", info.Mode);
-            Assert.Null(HttpStore.ProbeAsync("http://127.0.0.1:1", TimeSpan.FromSeconds(2)).Result);
+            Assert.Null(await HttpStore.ProbeAsync("http://127.0.0.1:1", TimeSpan.FromSeconds(2)));
 
             var store = new HttpStore(_url);
             store.Connect();

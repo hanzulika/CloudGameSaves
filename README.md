@@ -55,7 +55,7 @@ python3 -m unittest discover -s server/tests     # server tests
 dotnet build SaveCloud/SaveCloud.csproj -c Release
 ```
 
-The UI is plain HTML/CSS/JS in `SaveCloud/ui/`. Open `index.html` in a browser to see it with sample data
+The UI is plain HTML/CSS/JS in `SaveCloud/web/`. Open `index.html` in a browser to see it with sample data
 (`?state=notAuthorized`, `?state=tailscaleMissing`, … for the setup screens).
 
 CI builds and tests on Windows, builds the installer, and publishes a release for every push to `master`.
@@ -63,7 +63,7 @@ CI builds and tests on Windows, builds the installer, and publishes a release fo
 ```
 SaveCloud/Core/      platform-independent logic (manifest, scanning, sync, server client), unit-tested
 SaveCloud/Platform/  Windows specifics: known folders, game libraries, Tailscale, process monitor, startup
-SaveCloud/UI/        tray app, WebView2 window;  SaveCloud/ui/  the HTML interface
+SaveCloud/UI/        tray app, WebView2 window;  SaveCloud/web/  the HTML interface
 server/              the Python server, systemd unit, installer, tests
 installer/           Inno Setup script for SaveCloudSetup.exe
 ```

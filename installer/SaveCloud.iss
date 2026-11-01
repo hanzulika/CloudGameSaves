@@ -10,6 +10,7 @@ AppVersion={#AppVersion}
 AppPublisher=SaveCloud
 DefaultDirName={localappdata}\Programs\SaveCloud
 PrivilegesRequired=lowest
+ArchitecturesAllowed=x64compatible
 DisableDirPage=yes
 DisableProgramGroupPage=yes
 DisableReadyPage=yes
