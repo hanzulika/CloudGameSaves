@@ -5,23 +5,14 @@ using System.IO;
 
 namespace SaveCloud.Core
 {
-    /// <summary>Per-PC settings, stored in %AppData%\SaveCloud\config.json.</summary>
+    /// <summary>Per-PC settings, stored in %AppData%\SaveCloud\config.json. Everything has a working default.</summary>
     public class AppConfig
     {
-        // --- Server connection (SFTP) ---
-        public string Host { get; set; } = "";
-        public int Port { get; set; } = 22;
-        public string Username { get; set; } = "savecloud";
-        /// <summary>Path to an OpenSSH private key (ed25519 recommended). Preferred over a password.</summary>
-        public string PrivateKeyPath { get; set; } = "";
-        /// <summary>Key passphrase, encrypted for the current Windows user (DPAPI). Empty if none.</summary>
-        public string PrivateKeyPassphraseProtected { get; set; } = "";
-        /// <summary>Password, encrypted for the current Windows user (DPAPI). Only used if no key is set.</summary>
-        public string PasswordProtected { get; set; } = "";
-        /// <summary>SHA256 fingerprint of the server's host key, pinned on first connect (trust on first use).</summary>
-        public string HostKeyFingerprint { get; set; } = "";
-        /// <summary>Folder on the server (inside the SFTP chroot) that holds all saves.</summary>
-        public string RemoteRoot { get; set; } = "/data";
+        // --- Server ---
+        /// <summary>Manual server address (e.g. http://100.101.102.103:8765). Empty = find it automatically via Tailscale.</summary>
+        public string ServerUrl { get; set; } = "";
+        /// <summary>The server found last time; tried first on the next start.</summary>
+        public string LastServerUrl { get; set; } = "";
 
         // --- Game detection ---
         /// <summary>Extra folders that contain installed games (e.g. D:\Games). Steam/Epic/GOG are found automatically.</summary>
@@ -41,12 +32,9 @@ namespace SaveCloud.Core
         /// <summary>How many old revisions per game to keep on the server.</summary>
         public int HistoryToKeep { get; set; } = 10;
         /// <summary>How often to check the server for saves uploaded by another PC.</summary>
-        public int PullIntervalMinutes { get; set; } = 15;
+        public int PullIntervalMinutes { get; set; } = 10;
         /// <summary>How often to check local save files for changes (catches games whose process can't be tracked).</summary>
         public int ScanIntervalMinutes { get; set; } = 5;
-
-        [JsonIgnore]
-        public bool IsServerConfigured => !string.IsNullOrWhiteSpace(Host) && !string.IsNullOrWhiteSpace(Username);
 
         public static AppConfig Load()
         {

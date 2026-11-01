@@ -41,7 +41,7 @@ namespace SaveCloud.Tests
 
             Scanner = new GameScanner(Env, Config);
             var state = SyncState.Load(Path.Combine(Root, "state.json"));
-            Engine = new SyncEngine(Config, transport, Scanner, state, g => Running.Contains(g));
+            Engine = new SyncEngine(Config, () => new FileStore(transport()), Scanner, state, g => Running.Contains(g));
             Rescan();
         }
 

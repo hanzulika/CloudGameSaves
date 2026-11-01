@@ -115,7 +115,7 @@ namespace SaveCloud.Tests
             Assert.Equal(SyncAction.Downloaded, b.Engine.Resolve("Hollow Test", keepLocal: false).Action);
             Assert.Equal("A's progress", b.Read("winLocalAppDataLow", Hollow + "user1.dat"));
             Assert.Null(b.Engine.State.Get("Hollow Test").Conflict);
-            Assert.NotEmpty(Directory.GetFiles(Path.Combine(AppPaths.BackupDir, RemoteStore.Slug("Hollow Test"))));
+            Assert.NotEmpty(Directory.GetFiles(Path.Combine(AppPaths.BackupDir, Slugs.Of("Hollow Test"))));
         }
 
         [Fact]
@@ -223,7 +223,7 @@ namespace SaveCloud.Tests
                 a.Write("winLocalAppDataLow", Hollow + "user1.dat", "rev " + i);
                 Assert.Equal(SyncAction.Uploaded, For(a.Sync(), "Hollow Test").Action);
             }
-            var revs = Directory.GetFiles(Path.Combine(_server, "games", RemoteStore.Slug("Hollow Test")), "rev-*.zip")
+            var revs = Directory.GetFiles(Path.Combine(_server, "games", Slugs.Of("Hollow Test")), "rev-*.zip")
                 .Select(Path.GetFileName).OrderBy(n => n).ToArray();
             Assert.Equal(new[] { "rev-000004.zip", "rev-000005.zip", "rev-000006.zip" }, revs);
         }
@@ -245,7 +245,7 @@ namespace SaveCloud.Tests
         [Fact]
         public void StaleLock_IsBroken_ActiveLock_Waits()
         {
-            using var store = new RemoteStore(new FolderTransport(_server));
+            using var store = new FileStore(new FolderTransport(_server));
             store.Connect();
             var held = store.Lock("Hollow Test", TimeSpan.FromSeconds(1));
             Assert.Throws<LockTimeoutException>(() => store.Lock("Hollow Test", TimeSpan.FromSeconds(1)));
@@ -254,7 +254,7 @@ namespace SaveCloud.Tests
 
             // Simulate a PC that crashed while holding the lock 20 minutes ago.
             var crashed = store.Lock("Hollow Test", TimeSpan.FromSeconds(1));
-            var lockDir = Path.Combine(_server, "games", RemoteStore.Slug("Hollow Test"), ".lock");
+            var lockDir = Path.Combine(_server, "games", Slugs.Of("Hollow Test"), ".lock");
             Directory.SetLastWriteTimeUtc(lockDir, DateTime.UtcNow.AddMinutes(-20));
             store.Lock("Hollow Test", TimeSpan.FromSeconds(1)).Dispose();
         }

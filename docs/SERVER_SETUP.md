@@ -1,5 +1,10 @@
 # SaveCloud server setup (Proxmox)
 
+> **Update:** PCs no longer connect over SFTP. They use the Tailscale-authenticated service in
+> [server/DEPLOY.md](../server/DEPLOY.md), which runs in this same container. This document still describes the
+> container, storage, Tailscale and backups. The SFTP account remains useful for admin access and manual restores,
+> but steps 7–9 (per-PC keys) no longer apply.
+
 This is the spec for the machine that stores the game saves. It's written so it can be handed to whoever (or
 whatever agent) administers the Proxmox host. **The server runs no SaveCloud code.** It is a locked-down
 SFTP-only account in a small container; all sync logic (versions, conflicts, locking) lives in the Windows app.

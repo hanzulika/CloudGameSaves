@@ -135,7 +135,7 @@ namespace SaveCloud.Core.Sync
         public static string Backup(string game, IList<SaveFile> files, int keepPerGame = 10)
         {
             if (files == null || files.Count == 0) return null;
-            string dir = System.IO.Path.Combine(AppPaths.BackupDir, RemoteStore.Slug(game));
+            string dir = System.IO.Path.Combine(AppPaths.BackupDir, Slugs.Of(game));
             Directory.CreateDirectory(dir);
             string path = System.IO.Path.Combine(dir, $"{DateTime.Now:yyyyMMdd-HHmmss}.zip");
             Create(files, path);

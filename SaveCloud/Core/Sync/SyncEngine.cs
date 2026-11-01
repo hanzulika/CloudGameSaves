@@ -47,8 +47,8 @@ namespace SaveCloud.Core.Sync
     public class SyncEngine
     {
         private readonly AppConfig _config;
-        private readonly Func<IRemoteTransport> _transportFactory;
-        private readonly GameScanner _scanner;
+        private readonly Func<IRemoteStore> _storeFactory;
+        private GameScanner _scanner;
         private readonly SyncState _state;
         private readonly Func<string, bool> _isRunning;
         /// <summary>Serializes sync operations (one network conversation at a time).</summary>
@@ -66,17 +66,27 @@ namespace SaveCloud.Core.Sync
         /// <summary>Raised when a new conflict needs the user's decision.</summary>
         public event Action<string, ConflictInfo> ConflictFound;
 
-        public SyncEngine(AppConfig config, Func<IRemoteTransport> transportFactory, GameScanner scanner,
+        public SyncEngine(AppConfig config, Func<IRemoteStore> storeFactory, GameScanner scanner,
                           SyncState state, Func<string, bool> isRunning)
         {
             _config = config;
-            _transportFactory = transportFactory;
+            _storeFactory = storeFactory;
             _scanner = scanner;
             _state = state;
             _isRunning = isRunning ?? (_ => false);
         }
 
         public SyncState State => _state;
+
+        /// <summary>Swaps in a scanner built from new settings (game folders, config-file option).</summary>
+        public void ReplaceScanner(GameScanner scanner)
+        {
+            lock (_gate)
+            {
+                _scanner = scanner;
+                _hashCache.Clear();
+            }
+        }
 
         /// <summary>Gives the engine the latest manifest and full scan.</summary>
         public void UpdateLocal(IList<ManifestGame> manifest, ScanResult scan)
@@ -98,7 +108,11 @@ namespace SaveCloud.Core.Sync
             public bool Installed { get; set; }
             public long? ServerRevision { get; set; }
             public string ServerFrom { get; set; }
+            public string ServerLogin { get; set; }
             public DateTime? ServerUploadedUtc { get; set; }
+            public long? SteamId { get; set; }
+            /// <summary>A local save file, for "open save folder".</summary>
+            public string SampleFile { get; set; }
             public GameState State { get; set; }
             public GameSyncResult LastResult { get; set; }
         }
@@ -124,7 +138,10 @@ namespace SaveCloud.Core.Sync
                         Installed = _scan.InstallPaths.ContainsKey(n),
                         ServerRevision = head?.Revision,
                         ServerFrom = head?.UploadedBy,
+                        ServerLogin = head?.UploadedLogin,
                         ServerUploadedUtc = head?.UploadedUtc,
+                        SteamId = local?.Manifest.SteamId ?? (_manifest.TryGetValue(n, out var mg) ? mg.SteamId : null),
+                        SampleFile = local?.Files.FirstOrDefault()?.ActualPath,
                         State = _state.Get(n),
                         LastResult = last,
                     };
@@ -256,9 +273,9 @@ namespace SaveCloud.Core.Sync
 
         // ---- core decision -----------------------------------------------------------------------------
 
-        private RemoteStore Open()
+        private IRemoteStore Open()
         {
-            var store = new RemoteStore(_transportFactory());
+            var store = _storeFactory();
             try
             {
                 store.Connect();
@@ -271,13 +288,13 @@ namespace SaveCloud.Core.Sync
             }
         }
 
-        private GameSyncResult SafeSyncOne(RemoteStore store, string name, RemoteHead head, bool allowPush, bool allowPull)
+        private GameSyncResult SafeSyncOne(IRemoteStore store, string name, RemoteHead head, bool allowPush, bool allowPull)
         {
             try { return SyncOne(store, name, head, allowPush, allowPull); }
             catch (Exception ex) { return Error(name, ex); }
         }
 
-        private GameSyncResult SyncOne(RemoteStore store, string name, RemoteHead head, bool allowPush, bool allowPull)
+        private GameSyncResult SyncOne(IRemoteStore store, string name, RemoteHead head, bool allowPush, bool allowPull)
         {
             var (mg, basePaths) = Locate(name, head);
             var local = _scanner.ScanGame(mg, basePaths);
@@ -319,36 +336,33 @@ namespace SaveCloud.Core.Sync
             return MarkConflict(name, local, head);
         }
 
-        private GameSyncResult Push(RemoteStore store, string name, DetectedGame local, long expectedRevision)
+        private GameSyncResult Push(IRemoteStore store, string name, DetectedGame local, long expectedRevision)
         {
             string zip = Path.Combine(AppPaths.TempDir, Guid.NewGuid().ToString("N") + ".zip");
             try
             {
                 var built = SaveArchive.Create(local.Files, zip);
-                using (store.Lock(name, TimeSpan.FromSeconds(60)))
+                RemoteHead head;
+                try
                 {
-                    RemoteHead head;
-                    try
-                    {
-                        head = store.Publish(name, expectedRevision, zip, built.Sha256, built.Fingerprint, built.Files, _config.HistoryToKeep);
-                    }
-                    catch (RevisionConflictException ex)
-                    {
-                        SetHead(name, ex.Current);
-                        if (ex.Current?.Fingerprint == built.Fingerprint)
-                        {
-                            Agree(name, ex.Current.Revision, built.Fingerprint, "Already identical");
-                            return Result(name, SyncAction.InSync);
-                        }
-                        // Another PC uploaded between our check and our write.
-                        return MarkConflict(name, local, ex.Current);
-                    }
-
-                    SetHead(name, head);
-                    Agree(name, head.Revision, built.Fingerprint, $"Uploaded revision {head.Revision}");
-                    Logger.Info($"Uploaded {name}: revision {head.Revision}, {built.Files.Count} files");
-                    return Result(name, SyncAction.Uploaded, $"Revision {head.Revision}");
+                    head = store.Publish(name, expectedRevision, zip, built.Sha256, built.Fingerprint, built.Files, _config.HistoryToKeep);
                 }
+                catch (RevisionConflictException ex)
+                {
+                    SetHead(name, ex.Current);
+                    if (ex.Current?.Fingerprint == built.Fingerprint)
+                    {
+                        Agree(name, ex.Current.Revision, built.Fingerprint, "Already identical");
+                        return Result(name, SyncAction.InSync);
+                    }
+                    // Another PC uploaded between our check and our write.
+                    return MarkConflict(name, local, ex.Current);
+                }
+
+                SetHead(name, head);
+                Agree(name, head.Revision, built.Fingerprint, $"Uploaded revision {head.Revision}");
+                Logger.Info($"Uploaded {name}: revision {head.Revision}, {built.Files.Count} files");
+                return Result(name, SyncAction.Uploaded, $"Revision {head.Revision}");
             }
             finally
             {
@@ -356,7 +370,7 @@ namespace SaveCloud.Core.Sync
             }
         }
 
-        private GameSyncResult Pull(RemoteStore store, string name, ManifestGame mg, List<string> basePaths,
+        private GameSyncResult Pull(IRemoteStore store, string name, ManifestGame mg, List<string> basePaths,
                                     DetectedGame local, RemoteHead head)
         {
             // Check placement before downloading anything.

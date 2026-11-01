@@ -27,7 +27,6 @@ namespace SaveCloud.Core
 
         public static string ConfigFile => Path.Combine(DataDir, "config.json");
         public static string StateFile => Path.Combine(DataDir, "state.json");
-        public static string DefaultKeyFile => Path.Combine(DataDir, "id_ed25519");
         public static string ManifestYaml => Path.Combine(CacheDir, "ludusavi-manifest.yaml");
         public static string ManifestCache => Path.Combine(CacheDir, "manifest-windows.json");
         public static string LogDir => Ensure(Path.Combine(CacheDir, "Logs"));

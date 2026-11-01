@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SaveCloud</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div class="app">
+    <header class="top">
+      <div class="brand">
+        <svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><use href="#logo"/></svg>
+        <span>SaveCloud</span>
+      </div>
+      <button class="conn" id="conn" type="button" title="Connection details">
+        <span class="dot"></span><span class="conn-text" id="connText">Starting…</span>
+      </button>
+      <div class="top-right">
+        <span class="last-sync" id="lastSync"></span>
+        <button class="btn primary" id="syncBtn" type="button">
+          <svg class="ico spin-when-busy" viewBox="0 0 24 24"><use href="#i-sync"/></svg>
+          <span id="syncLabel">Sync now</span>
+        </button>
+        <button class="btn icon" id="settingsBtn" type="button" title="Settings">
+          <svg class="ico" viewBox="0 0 24 24"><use href="#i-gear"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <section class="banner" id="banner" hidden></section>
+
+    <nav class="toolbar">
+      <div class="chips" id="chips" role="tablist"></div>
+      <label class="search">
+        <svg class="ico" viewBox="0 0 24 24"><use href="#i-search"/></svg>
+        <input id="search" type="search" placeholder="Search games" autocomplete="off">
+      </label>
+    </nav>
+
+    <main class="grid" id="grid" aria-live="polite"></main>
+    <div class="empty" id="empty" hidden></div>
+  </div>
+
+  <!-- Setup / connection overlay -->
+  <div class="overlay" id="setup" hidden>
+    <div class="setup">
+      <svg class="logo big" viewBox="0 0 64 64" aria-hidden="true"><use href="#logo"/></svg>
+      <h1 id="setupTitle">Getting SaveCloud ready</h1>
+      <p class="muted" id="setupLead">This only takes a moment.</p>
+      <ol class="steps" id="steps"></ol>
+      <div class="setup-actions" id="setupActions"></div>
+      <button class="link" id="setupDismiss" type="button">Look around anyway</button>
+    </div>
+  </div>
+
+  <!-- Settings drawer -->
+  <div class="scrim" id="scrim" hidden></div>
+  <aside class="drawer" id="drawer" aria-hidden="true">
+    <div class="drawer-head">
+      <h2>Settings</h2>
+      <button class="btn icon" id="closeDrawer" type="button" title="Close"><svg class="ico" viewBox="0 0 24 24"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="drawer-body">
+      <section class="group">
+        <h3>General</h3>
+        <label class="toggle"><span><b>Start with Windows</b><small>Restores your newest saves every time you sign in.</small></span><input type="checkbox" data-setting="StartWithWindows"><i></i></label>
+        <label class="toggle"><span><b>Skip Steam Cloud games</b><small>Steam already syncs these; syncing twice can cause Steam conflict prompts.</small></span><input type="checkbox" data-setting="SkipSteamCloudGames"><i></i></label>
+        <label class="toggle"><span><b>Sync settings files too</b><small>Graphics and keybinds. Usually differ per PC, so off by default.</small></span><input type="checkbox" data-setting="IncludeConfigFiles"><i></i></label>
+      </section>
+
+      <section class="group">
+        <h3>Game folders</h3>
+        <p class="muted small">Steam, Epic, GOG, Program Files and any <code>X:\Games</code> folder are found automatically. Add other folders that contain installed games.</p>
+        <ul class="list" id="roots"></ul>
+        <button class="btn" id="addRoot" type="button"><svg class="ico" viewBox="0 0 24 24"><use href="#i-plus"/></svg>Add folder</button>
+      </section>
+
+      <section class="group">
+        <h3>Not synced</h3>
+        <ul class="list" id="ignored"></ul>
+      </section>
+
+      <section class="group">
+        <h3>Server</h3>
+        <dl class="kv" id="serverInfo"></dl>
+        <details>
+          <summary>Advanced</summary>
+          <label class="field"><span>Server address <small>Leave empty to find it automatically</small></span>
+            <input type="text" id="serverUrl" placeholder="http://100.x.y.z:8765" spellcheck="false"></label>
+          <label class="field"><span>Old versions kept per game</span>
+            <input type="number" min="1" max="50" data-setting="HistoryToKeep"></label>
+        </details>
+      </section>
+
+      <section class="group">
+        <h3>Help</h3>
+        <div class="row-btns">
+          <button class="btn" data-cmd="openBackups" type="button">Local backups</button>
+          <button class="btn" data-cmd="openLogs" type="button">Log files</button>
+          <button class="btn" data-cmd="rescan" type="button">Rescan games</button>
+        </div>
+        <p class="muted small" id="version"></p>
+      </section>
+    </div>
+  </aside>
+
+  <!-- Confirm dialog -->
+  <div class="overlay" id="confirm" hidden>
+    <div class="dialog">
+      <h2 id="confirmTitle"></h2>
+      <div id="confirmBody"></div>
+      <div class="dialog-actions">
+        <button class="btn" id="confirmNo" type="button">Cancel</button>
+        <button class="btn primary" id="confirmYes" type="button">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+
+  <svg width="0" height="0" style="position:absolute">
+    <defs>
+      <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#7c9cff"/><stop offset="1" stop-color="#b57bff"/>
+      </linearGradient>
+    </defs>
+    <symbol id="logo" viewBox="0 0 64 64">
+      <path fill="url(#lg)" d="M47.5 26.2A16 16 0 0 0 17 22.6 12 12 0 0 0 18 46.5h29a10.2 10.2 0 0 0 .5-20.3z"/>
+      <path fill="#0d1020" d="M31 29h2v8.2l3.3-3.3 1.4 1.4L32 41l-5.7-5.7 1.4-1.4L31 37.2z" opacity=".9"/>
+      <rect x="25" y="25" width="14" height="2.4" rx="1.2" fill="#0d1020" opacity=".9"/>
+    </symbol>
+    <symbol id="i-sync" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M20 11a8 8 0 0 0-14.3-4.9L4 8m0-4v4h4M4 13a8 8 0 0 0 14.3 4.9L20 16m0 4v-4h-4"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></g></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></g></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></g></symbol>
+    <symbol id="i-cloud-up" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 16.6A4.5 4.5 0 0 0 17.5 8h-1.3A7 7 0 1 0 4 14.9"/><path d="M12 12v9m-4-5 4-4 4 4"/></g></symbol>
+    <symbol id="i-pc" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></g></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><g fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></g></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path fill="currentColor" d="M8 5.5v13a1 1 0 0 0 1.5.9l10-6.5a1 1 0 0 0 0-1.8l-10-6.5A1 1 0 0 0 8 5.5z"/></symbol>
+  </svg>
+
+  <script src="app.js"></script>
+</body>
+</html>

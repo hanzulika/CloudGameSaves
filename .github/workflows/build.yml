@@ -5,7 +5,17 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write   # publishing the release on master
+
 jobs:
+  server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Server tests
+        run: python3 -m unittest discover -s server/tests -v
+
   windows:
     runs-on: windows-latest
     steps:
@@ -15,15 +25,34 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Test
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Test (includes end-to-end tests against the Python server)
         run: dotnet test SaveCloud.Tests -c Release
 
       - name: Build app
         run: dotnet build SaveCloud/SaveCloud.csproj -c Release
 
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
+          & $iscc "/DAppVersion=2.0.${{ github.run_number }}" installer\SaveCloud.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - uses: actions/upload-artifact@v4
         with:
-          name: SaveCloud
-          path: |
-            SaveCloud/bin/Release/net481/
-            !SaveCloud/bin/Release/net481/*.pdb
+          name: SaveCloudSetup
+          path: installer/output/SaveCloudSetup.exe
+
+      - name: Publish release (master only)
+        if: github.ref == 'refs/heads/master'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v2.0.${{ github.run_number }}
+          name: SaveCloud 2.0.${{ github.run_number }}
+          files: installer/output/SaveCloudSetup.exe
+          make_latest: true

@@ -12,12 +12,13 @@
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <Nullable>disable</Nullable>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>app.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
-    <PackageReference Include="SSH.NET" Version="2026.0.0" />
     <PackageReference Include="YamlDotNet" Version="16.3.0" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
   </ItemGroup>
 
   <ItemGroup>
@@ -33,9 +34,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Update="GamesPathForm.cs" SubType="Form" />
-    <Compile Update="UI\StatusForm.cs" SubType="Form" />
-    <Compile Update="UI\SettingsForm.cs" SubType="Form" />
+    <!-- The HTML interface, served to WebView2 from the app folder. -->
+    <None Include="ui\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <Compile Update="UI\MainWindow.cs" SubType="Form" />
   </ItemGroup>
 
 </Project>

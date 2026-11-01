@@ -1,0 +1,30 @@
+[Unit]
+Description=SaveCloud save server (Tailscale-authenticated)
+Documentation=https://github.com/hanzulika/CloudGameSaves/blob/master/server/DEPLOY.md
+Wants=tailscaled.service network-online.target
+After=tailscaled.service network-online.target
+
+[Service]
+Type=simple
+User=savecloud
+Group=savecloud
+ExecStart=/usr/bin/python3 /opt/savecloud/savecloud_server.py --data /srv/savecloud/data --allow-file /etc/savecloud/allowed_logins --mode shared
+Restart=always
+RestartSec=5
+
+# Hardening: the service can only write its data folder.
+NoNewPrivileges=yes
+ProtectSystem=full
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=yes
+LockPersonality=yes
+ReadWritePaths=/srv/savecloud/data
+
+[Install]
+WantedBy=multi-user.target
