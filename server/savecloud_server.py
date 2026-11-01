@@ -187,6 +187,8 @@ class Store:
                 "UploadedLogin": login,
                 "Files": meta.get("Files") or [],
             }
+            if isinstance(meta.get("Rules"), list) and all(isinstance(r, str) for r in meta["Rules"]):
+                head["Rules"] = meta["Rules"][:50]   # folder patterns of games added by hand on a PC
             tmp = os.path.join(d, ".head.json.tmp")
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(head, f, indent=1)

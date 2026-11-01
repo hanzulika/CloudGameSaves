@@ -83,7 +83,7 @@ namespace SaveCloud.Core.Remote
             => GetJson<RemoteHead>($"/api/v1/games/{Uri.EscapeDataString(Slugs.Of(game))}/head");
 
         public RemoteHead Publish(string game, long expectedRevision, string archivePath, string archiveSha256,
-                                  string fingerprint, List<RemoteFileEntry> files, int historyToKeep)
+                                  string fingerprint, List<RemoteFileEntry> files, int historyToKeep, List<string> rules = null)
         {
             var meta = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new
             {
@@ -91,6 +91,7 @@ namespace SaveCloud.Core.Remote
                 Fingerprint = fingerprint,
                 ArchiveSha256 = archiveSha256,
                 Files = files,
+                Rules = rules,
             }));
             string url = $"{_base}/api/v1/games/{Uri.EscapeDataString(Slugs.Of(game))}/revisions?expected={expectedRevision}&keep={historyToKeep}";
 

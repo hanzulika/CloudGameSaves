@@ -15,9 +15,11 @@ namespace SaveCloud.Core.Scan
     {
         public string Path { get; set; }
         public RootKind Kind { get; set; }
+        /// <summary>Launcher that owns this library (steam, epic, gog, origin, uplay), or null.</summary>
+        public string Store { get; set; }
 
         public GameRoot() { }
-        public GameRoot(string path, RootKind kind) { Path = path; Kind = kind; }
+        public GameRoot(string path, RootKind kind, string store = null) { Path = path; Kind = kind; Store = store; }
 
         /// <summary>The folder whose subfolders are game install folders.</summary>
         public string GamesFolder => Kind == RootKind.SteamLibrary
@@ -25,6 +27,21 @@ namespace SaveCloud.Core.Scan
             : Path;
 
         public override string ToString() => $"{Path} ({Kind})";
+    }
+
+    /// <summary>
+    /// A program's install folder found outside the game libraries: Windows' installed-programs list, desktop and
+    /// Start-menu shortcuts, or a launcher's own records.
+    /// </summary>
+    public class InstallCandidate
+    {
+        public string Path { get; set; }
+        /// <summary>Name shown by Windows or on the shortcut, e.g. "The Sims 4 DX9".</summary>
+        public string DisplayName { get; set; }
+        /// <summary>Launcher it was installed with (steam, epic, gog, origin, uplay), or null if unknown.</summary>
+        public string Store { get; set; }
+        public string Source { get; set; }
+        public override string ToString() => $"{DisplayName} -> {Path} ({Source}{(Store == null ? "" : ", " + Store)})";
     }
 
     /// <summary>
@@ -37,6 +54,7 @@ namespace SaveCloud.Core.Scan
         public Dictionary<string, string> Folders { get; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         public string OsUserName { get; set; } = Environment.UserName;
         public List<GameRoot> Roots { get; } = new List<GameRoot>();
+        public List<InstallCandidate> Installs { get; } = new List<InstallCandidate>();
         /// <summary>Steam's own install folder (has userdata\), or null when Steam isn't installed.</summary>
         public string SteamRoot { get; set; }
         /// <summary>App IDs that have an appmanifest_*.acf in some Steam library, i.e. installed through Steam.</summary>

@@ -185,8 +185,9 @@ namespace SaveCloud.UI
                 {
                     _engine.ReplaceScanner(_scanner);
                 }
-                var scan = _scanner.ScanAll(_manifest, _cts.Token);
-                _engine.UpdateLocal(_manifest, scan);
+                var games = GameScanner.WithCustomGames(_manifest, _config.CustomGames);
+                var scan = _scanner.ScanAll(games, _cts.Token);
+                _engine.UpdateLocal(games, scan);
                 _processes.SetInstallFolders(scan.InstallPaths);
                 foreach (var s in scan.Skipped) Logger.Info("Skipped " + s);
             }
@@ -346,23 +347,23 @@ namespace SaveCloud.UI
             foreach (var sk in _engine?.LastScan.SkippedGames ?? new List<SkippedGame>())
             {
                 if (synced.Contains(sk.Name)) continue;
-                games.Add(new
+                games.Add(new Dictionary<string, object>
                 {
-                    name = sk.Name,
-                    steamId = sk.SteamId,
-                    kind = sk.Reason == SkipReason.SteamCloud ? "steamCloud" : "tooLarge",
-                    message = sk.Reason == SkipReason.SteamCloud ? "Steam Cloud already syncs this game"
+                    ["name"] = sk.Name,
+                    ["steamId"] = sk.SteamId,
+                    ["kind"] = sk.Reason == SkipReason.LauncherCloud ? "launcherCloud" : "tooLarge",
+                    ["store"] = sk.Store,
+                    ["message"] = sk.Reason == SkipReason.LauncherCloud ? $"{StoreName(sk.Store)} already syncs this game"
                         : $"Saves are {sk.Bytes / (1024 * 1024)} MB, over the {_config.MaxGameSizeMB} MB limit",
-                    localFiles = sk.Files,
-                    localBytes = sk.Bytes,
-                    serverRev = (long?)null,
-                    serverFrom = (string)null,
-                    serverLogin = (string)null,
-                    serverUtc = (DateTime?)null,
-                    activityUtc = (DateTime?)null,
-                    conflict = (object)null,
+                    ["localFiles"] = sk.Files,
+                    ["localBytes"] = sk.Bytes,
                 });
             }
+            var suggestions = (_engine?.LastScan.Suggestions ?? new List<SaveSuggestion>()).Select(x => new
+            {
+                name = x.Name, folder = x.Folder, template = x.Template, files = x.Files, bytes = x.Bytes,
+                newestUtc = x.NewestUtc == DateTime.MinValue ? (DateTime?)null : x.NewestUtc, source = x.Source,
+            }).ToList();
             return new
             {
                 version = typeof(TrayApp).Assembly.GetName().Version.ToString(3),
@@ -375,7 +376,8 @@ namespace SaveCloud.UI
                 settings = new
                 {
                     _config.StartWithWindows,
-                    _config.SkipSteamCloudGames,
+                    _config.SkipLauncherCloudGames,
+                    customGames = (_config.CustomGames ?? new List<CustomGame>()).Select(c => new { c.Name, Folder = DisplayFolder(c.Pattern) }),
                     _config.IncludeConfigFiles,
                     _config.HistoryToKeep,
                     _config.ServerUrl,
@@ -383,7 +385,28 @@ namespace SaveCloud.UI
                     _config.IgnoredGames,
                 },
                 games,
+                suggestions,
             };
+        }
+
+        private static string StoreName(string store)
+        {
+            switch (store)
+            {
+                case "steam": return "Steam Cloud";
+                case "epic": return "Epic Games cloud saves";
+                case "gog": return "GOG Galaxy";
+                case "origin": return "The EA app";
+                case "uplay": return "Ubisoft Connect";
+                default: return "Its launcher";
+            }
+        }
+
+        /// <summary>Where a template points on this PC, for display.</summary>
+        private string DisplayFolder(string template)
+        {
+            try { return _scanner?.Paths.Resolve(template, new List<string>()) ?? template; }
+            catch { return template; }
         }
 
         private object ToCard(SyncEngine.GameView g)
@@ -392,6 +415,7 @@ namespace SaveCloud.UI
             string kind, message = last?.Message;
             if (g.State?.Conflict != null) kind = "conflict";
             else if (_processes.IsRunning(g.Name)) kind = "running";
+            else if (last?.Action == SyncAction.NotOnThisPc) kind = "remote";
             else if (last?.Action == SyncAction.Error) kind = "error";
             else if (last?.Action == SyncAction.NotInstalled) kind = "notInstalled";
             else if (last?.Action == SyncAction.LocalMissing) kind = "missing";
@@ -400,6 +424,7 @@ namespace SaveCloud.UI
             else if (g.State?.LastSyncUtc != null) kind = "synced";
             else { kind = "waiting"; message = g.ServerRevision != null ? "Downloads at the next sync" : message; }
 
+            var remoteFolders = (g.RemoteRules ?? new List<string>()).Select(DisplayFolder).ToList();
             var c = g.State?.Conflict;
             var activity = new[] { g.ServerUploadedUtc, g.State?.LastSyncUtc }.Where(d => d != null).DefaultIfEmpty(null).Max();
             return new
@@ -415,6 +440,7 @@ namespace SaveCloud.UI
                 serverLogin = g.ServerLogin,
                 serverUtc = g.ServerUploadedUtc,
                 activityUtc = activity,
+                remoteFolders,
                 conflict = c == null ? null : new { localUtc = c.LocalNewestUtc, remoteUtc = c.RemoteNewestUtc, remoteMachine = c.RemoteMachine },
             };
         }
@@ -453,7 +479,7 @@ namespace SaveCloud.UI
                     Enqueue("Updating", () => Rescan());
                     break;
                 case "alsoSync":
-                    if (!_config.AlsoSyncSteamCloudGames.Contains(game)) _config.AlsoSyncSteamCloudGames.Add(game);
+                    if (!_config.AlsoSyncCloudGames.Contains(game)) _config.AlsoSyncCloudGames.Add(game);
                     _config.Save();
                     Enqueue($"Adding {game}", () => { Rescan(); SyncOne(game); });
                     break;
@@ -463,6 +489,29 @@ namespace SaveCloud.UI
                     Enqueue("Looking for games", () => { Rescan(); FullSync(); });
                     break;
                 case "addRoot": AddRoot(); break;
+                case "addGame": AddGameFromFolder(((string)msg["name"] ?? "").Trim()); break;
+                case "addSuggestion":
+                    AddCustom(((string)msg["name"] ?? "").Trim(), (string)msg["template"]);
+                    break;
+                case "hideSuggestion":
+                    if (!_config.HiddenSuggestions.Contains((string)msg["template"])) _config.HiddenSuggestions.Add((string)msg["template"]);
+                    _config.Save();
+                    Enqueue("Updating", () => Rescan());
+                    break;
+                case "approveRemote":
+                {
+                    var view = _engine?.Snapshot().FirstOrDefault(v => v.Name == game);
+                    foreach (var rule in view?.RemoteRules ?? new List<string>())
+                        _config.CustomGames.Add(new CustomGame { Name = game, Pattern = rule });
+                    _config.Save();
+                    Enqueue($"Adding {game}", () => { Rescan(); SyncOne(game); });
+                    break;
+                }
+                case "removeCustom":
+                    _config.CustomGames.RemoveAll(c => c.Name == game);
+                    _config.Save();
+                    Enqueue("Updating", () => Rescan());
+                    break;
                 case "removeRoot":
                     _config.ExtraRoots.Remove((string)msg["path"]);
                     _config.Save();
@@ -487,8 +536,8 @@ namespace SaveCloud.UI
                     _config.StartWithWindows = (bool)value;
                     StartupRegistration.Apply(_config.StartWithWindows);
                     break;
-                case "SkipSteamCloudGames":
-                    _config.SkipSteamCloudGames = (bool)value;
+                case "SkipLauncherCloudGames":
+                    _config.SkipLauncherCloudGames = (bool)value;
                     Enqueue("Looking for games", () => { Rescan(); FullSync(); });
                     break;
                 case "IncludeConfigFiles":
@@ -517,6 +566,27 @@ namespace SaveCloud.UI
                 _config.Save();
                 Enqueue("Looking for games", () => { Rescan(); FullSync(); });
             }
+        }
+
+        private void AddGameFromFolder(string name)
+        {
+            using (var d = new FolderBrowserDialog { Description = "Choose the folder where this game keeps its saves", ShowNewFolderButton = false })
+            {
+                if (d.ShowDialog(_window) != DialogResult.OK) return;
+                if (_scanner == null) { Toast("Still loading, try again in a moment"); return; }
+                AddCustom(string.IsNullOrWhiteSpace(name) ? Path.GetFileName(d.SelectedPath) : name, _scanner.Paths.ToTemplate(d.SelectedPath));
+            }
+        }
+
+        private void AddCustom(string name, string template)
+        {
+            if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(template)) return;
+            if (!_config.CustomGames.Any(c => c.Name == name && c.Pattern == template))
+                _config.CustomGames.Add(new CustomGame { Name = name, Pattern = template });
+            _config.Save();
+            Logger.Info($"Added game {name}: {template}");
+            Enqueue($"Adding {name}", () => { Rescan(); SyncOne(name); });
+            Toast($"Added {name}");
         }
 
         private void OpenFolder(string game)

@@ -106,7 +106,7 @@ namespace SaveCloud.Tests
         {
             var manifest = new List<ManifestGame>
             {
-                new ManifestGame { Name = "Cloudy", SteamId = 42, SteamCloud = true,
+                new ManifestGame { Name = "Cloudy", SteamId = 42, SteamCloud = true, CloudStores = { "steam" },
                     Files = { new FileRule { Pattern = "<winAppData>/Cloudy", IsSave = true } } },
             };
             _pc.Write("winAppData", "Cloudy/s.sav", "x");

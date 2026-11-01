@@ -66,10 +66,13 @@ const KIND = {
   notInstalled: { badge: "muted", icon: "i-pc",       label: "Not installed",   group: "waiting" },
   waiting:      { badge: "info",  icon: "i-sync",     label: "Waiting",         group: "waiting" },
   pending:      { badge: "info",  icon: "i-cloud-up", label: "Not uploaded yet", group: "waiting" },
-  steamCloud:   { badge: "muted", icon: "i-cloud-up", label: "Steam Cloud",     group: "skipped" },
+  launcherCloud:{ badge: "muted", icon: "i-cloud-up", label: "Launcher cloud",  group: "skipped" },
+  remote:       { badge: "info",  icon: "i-pc",       label: "On another PC",   group: "waiting" },
   tooLarge:     { badge: "muted", icon: "i-alert",    label: "Too large",       group: "skipped" },
 };
 const kindOf = g => KIND[g.kind] || KIND.waiting;
+const STORE = { steam: "Steam Cloud", epic: "Epic cloud", gog: "GOG Galaxy", origin: "EA app", uplay: "Ubisoft Connect" };
+const badgeLabel = g => g.kind === "launcherCloud" ? (STORE[g.store] || "Launcher cloud") : kindOf(g).label;
 
 function metaLine(g) {
   switch (g.kind) {
@@ -83,6 +86,7 @@ function metaLine(g) {
     case "conflict": return "Changed on this PC and on another one";
     case "running": return "Uploads when you close the game";
     case "notInstalled": return `Install the game here to get its saves${g.serverRev ? ` (v${g.serverRev} on server)` : ""}`;
+    case "remote": return `Added by hand on ${esc(g.serverFrom || "another PC")}`;
     default: return esc(g.message || "");
   }
 }
@@ -93,6 +97,7 @@ function render() {
   renderHeader();
   renderSetup();
   renderBanner();
+  renderSuggestions();
   renderChips();
   renderGrid();
   renderSettings();
@@ -166,6 +171,35 @@ function renderSetup() {
   $("setupActions").innerHTML = a.join("");
 }
 
+let suggestOpen = false;
+function renderSuggestions() {
+  const el = $("suggest");
+  const list = state.suggestions || [];
+  if (!list.length || state.connection.state !== "connected") { el.hidden = true; el.innerHTML = ""; return; }
+  if (el.contains(document.activeElement)) return; // don't wipe a name the user is editing
+  el.hidden = false;
+  el.innerHTML = `<details ${suggestOpen ? "open" : ""}><summary>${icon("i-search")}<span class="grow"><b>${list.length} possible game ${list.length === 1 ? "save" : "saves"} found</b> <span class="muted">· folders that look like saves but aren't from a game SaveCloud knows. Check the name, then add the ones you want.</span></span><svg class="ico chev" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="m9 6 6 6-6 6"/></svg></summary>
+    <ul>${list.map(x => `<li data-name="${esc(x.name)}">
+      <input value="${esc(x.name)}" aria-label="Game name" spellcheck="false">
+      <div class="where"><code title="${esc(x.folder)}">${esc(x.folder)}</code>${x.files} ${x.files === 1 ? "file" : "files"} · ${size(x.bytes)}${x.newestUtc ? ` · saved ${ago(x.newestUtc)}` : ""}</div>
+      <div class="acts"><button class="btn primary small" data-add-sug="${esc(x.template)}">Add</button><button class="btn small" data-hide-sug="${esc(x.template)}">Not a game</button></div>
+    </li>`).join("")}</ul></details>`;
+  el.querySelector("details").addEventListener("toggle", e => { suggestOpen = e.target.open; });
+}
+
+function askAddGame() {
+  confirm("Add a game", `<p>For a game SaveCloud didn't find: name it, then choose the folder where it keeps its saves. Your other PCs can add it with one click.</p><input type="text" id="newGameName" placeholder="Game name, e.g. Bloodborne" spellcheck="false">`, "Choose save folder…")
+    .then(ok => ok && send("addGame", { name: (document.getElementById("newGameName")?.value || "").trim() }));
+  setTimeout(() => document.getElementById("newGameName")?.focus(), 30);
+}
+
+function confirmApprove(game) {
+  const g = state.games.find(x => x.name === game);
+  const where = (g?.remoteFolders || []).map(f => `<code>${esc(f)}</code>`).join("");
+  confirm(`Sync ${game} on this PC?`, `<p>${esc(g?.serverFrom || "Another PC")} added this game by hand. SaveCloud will sync this folder here:</p><div class="folders">${where || "<code>(unknown)</code>"}</div>`, "Add on this PC")
+    .then(ok => ok && send("approveRemote", { game }));
+}
+
 function renderBanner() {
   const conflicts = state.games.filter(g => g.kind === "conflict").length;
   const errors = state.games.filter(g => g.kind === "error").length;
@@ -176,10 +210,12 @@ function renderBanner() {
   } else if (errors) {
     b.className = "banner bad";
     b.innerHTML = `${icon("i-alert")}<span class="grow"><b>${errors} ${errors === 1 ? "game" : "games"} couldn't sync.</b> SaveCloud will retry automatically.</span><button class="btn small" data-filter="attention">Show</button>`;
-  } else if (state.games.some(g => g.kind === "steamCloud") && state.settings?.SkipSteamCloudGames) {
-    const n = state.games.filter(g => g.kind === "steamCloud").length;
+  } else if (state.games.some(g => g.kind === "launcherCloud") && state.settings?.SkipLauncherCloudGames) {
+    const lc = state.games.filter(g => g.kind === "launcherCloud");
+    const n = lc.length;
+    const names = [...new Set(lc.map(g => STORE[g.store] || "their launcher"))].join(", ");
     b.className = "banner info";
-    b.innerHTML = `${icon("i-cloud-up")}<span class="grow"><b>${n} Steam ${n === 1 ? "game is" : "games are"} left to Steam Cloud.</b> SaveCloud can sync ${n === 1 ? "it" : "them"} too. Steam may then occasionally ask which save to keep when you launch a game.</span><button class="btn small" data-filter="skipped">See them</button><button class="btn primary small" data-sync-steam="1">Sync them too</button>`;
+    b.innerHTML = `${icon("i-cloud-up")}<span class="grow"><b>${n} ${n === 1 ? "game is" : "games are"} left to ${esc(names)}.</b> SaveCloud can sync ${n === 1 ? "it" : "them"} too; the launcher may then occasionally ask which save to keep.</span><button class="btn small" data-filter="skipped">See them</button><button class="btn primary small" data-sync-steam="1">Sync them too</button>`;
   } else if (state.connection.state === "notAuthorized" && state.everConnected) {
     b.className = "banner";
     b.innerHTML = `${icon("i-alert")}<span class="grow">This server no longer accepts <b>${esc(state.connection.login)}</b>. Ask the owner to add it back.</span>`;
@@ -225,8 +261,12 @@ function card(g) {
   const details = [];
   if (g.localFiles) details.push(`${g.localFiles} ${g.localFiles === 1 ? "file" : "files"}`, size(g.localBytes));
   let extra = "";
-  if (g.kind === "steamCloud") {
-    extra = `<div class="choice one"><button data-also="${esc(g.name)}"><b>Also sync with SaveCloud</b><small>For copies not bought on Steam, or PCs without Steam</small></button></div>`;
+  if (g.kind === "launcherCloud") {
+    extra = `<div class="choice one"><button data-also="${esc(g.name)}"><b>Also sync with SaveCloud</b><small>Useful for PCs where it isn't installed through ${esc(STORE[g.store] ? STORE[g.store].replace(/ cloud$/, "") : "this launcher")}</small></button></div>`;
+  }
+  if (g.kind === "remote") {
+    const where = (g.remoteFolders || []).map(f => `<code title="${esc(f)}">${esc(f)}</code>`).join("");
+    extra = `<div class="folders">${where}</div><div class="choice one"><button data-approve="${esc(g.name)}"><b>Add on this PC</b><small>Sync this folder here too</small></button></div>`;
   }
   if (g.kind === "conflict" && g.conflict) {
     const localNewer = new Date(g.conflict.localUtc) > new Date(g.conflict.remoteUtc);
@@ -236,7 +276,7 @@ function card(g) {
     </div>`;
   }
   return `<article class="card ${esc(g.kind)}" data-game="${esc(g.name)}">
-    <div class="cover">${cover(g)}<span class="badge ${k.badge}">${icon(k.icon)}${k.label}</span>
+    <div class="cover">${cover(g)}<span class="badge ${k.badge}">${icon(k.icon)}${esc(badgeLabel(g))}</span>
       <button class="more" title="More" data-menu="${esc(g.name)}">${icon("i-more")}</button></div>
     <div class="body">
       <div class="title" title="${esc(g.name)}">${esc(g.name)}</div>
@@ -283,6 +323,10 @@ function renderSettings() {
   $("roots").innerHTML = roots.length
     ? roots.map(r => `<li><span title="${esc(r)}">${esc(r)}</span><button class="btn small" data-unroot="${esc(r)}">Remove</button></li>`).join("")
     : `<li class="none">No extra folders</li>`;
+  const custom = s.customGames || [];
+  $("customGames").innerHTML = custom.length
+    ? custom.map(c => `<li><span title="${esc(c.Folder)}"><b>${esc(c.Name)}</b> · ${esc(c.Folder)}</span><button class="btn small" data-uncustom="${esc(c.Name)}">Remove</button></li>`).join("")
+    : `<li class="none">None yet. Use "Add a game" for games SaveCloud doesn't find</li>`;
   const ign = s.IgnoredGames || [];
   $("ignored").innerHTML = ign.length
     ? ign.map(n => `<li><span>${esc(n)}</span><button class="btn small" data-unignore="${esc(n)}">Sync again</button></li>`).join("")
@@ -312,12 +356,21 @@ document.addEventListener("click", e => {
   if (t.dataset.unroot) { send("removeRoot", { path: t.dataset.unroot }); return; }
   if (t.dataset.unignore) { send("unignore", { game: t.dataset.unignore }); return; }
   if (t.dataset.also) { send("alsoSync", { game: t.dataset.also }); return; }
-  if (t.dataset.syncSteam) { send("setSetting", { key: "SkipSteamCloudGames", value: false }); toast("Adding Steam Cloud games…"); return; }
+  if (t.dataset.syncSteam) { send("setSetting", { key: "SkipLauncherCloudGames", value: false }); toast("Adding launcher-synced games…"); return; }
+  if (t.dataset.approve) { confirmApprove(t.dataset.approve); return; }
+  if (t.dataset.addSug) {
+    const li = t.closest("li");
+    send("addSuggestion", { template: t.dataset.addSug, name: li.querySelector("input").value.trim() || li.dataset.name });
+    li.remove(); return;
+  }
+  if (t.dataset.hideSug) { send("hideSuggestion", { template: t.dataset.hideSug }); t.closest("li").remove(); return; }
+  if (t.dataset.uncustom) { send("removeCustom", { game: t.dataset.uncustom }); return; }
   switch (t.id) {
     case "syncBtn": send("syncNow"); break;
     case "settingsBtn": case "conn": openDrawer(true); break;
     case "closeDrawer": openDrawer(false); break;
     case "addRoot": send("addRoot"); break;
+    case "addGameBtn": askAddGame(); break;
     case "setupDismiss": setupDismissed = true; renderSetup(); break;
   }
 });
@@ -421,7 +474,12 @@ function mockState() {
     version: "2.0 preview", machine: "HANZU", everConnected: conn === "connected", busy: p.get("busy"), scanning: false,
     lastSyncUtc: hrs(0.05),
     connection: { state: conn, login: "hanzuioan5@gmail.com", tsLogin: "hanzuioan5@gmail.com", server: conn === "connected" || conn === "notAuthorized" ? "http://100.99.12.7:8765" : "", mode: "shared" },
-    settings: { StartWithWindows: true, SkipSteamCloudGames: true, IncludeConfigFiles: false, HistoryToKeep: 10, ServerUrl: "", ExtraRoots: ["D:\\Emulators\\Games"], IgnoredGames: ["Desktop Goose"] },
+    suggestions: [
+      { name: "Les Sims 4", folder: "C:\\Users\\Hanzu\\Documents\\Electronic Arts\\Les Sims 4\\saves", template: "<winDocuments>/Electronic Arts/Les Sims 4/saves", files: 12, bytes: 48000000, newestUtc: hrs(20), source: "Documents" },
+      { name: "Bloodborne", folder: "D:\\Emulators\\shadPS4\\user\\savedata", template: "D:/Emulators/shadPS4/user/savedata", files: 3, bytes: 5400000, newestUtc: hrs(48), source: "shortcut" },
+      { name: "Card Wars", folder: "C:\\Users\\Hanzu\\AppData\\LocalLow\\Cartoon Network\\Card Wars", template: "<winLocalAppDataLow>/Cartoon Network/Card Wars", files: 4, bytes: 130000, newestUtc: hrs(200), source: "AppData\\LocalLow" },
+    ],
+    settings: { StartWithWindows: true, SkipLauncherCloudGames: true, customGames: [{ Name: "Minecraft (TLauncher)", Folder: "C:\\Users\\Hanzu\\AppData\\Roaming\\.minecraft\\saves" }], IncludeConfigFiles: false, HistoryToKeep: 10, ServerUrl: "", ExtraRoots: ["D:\\Emulators\\Games"], IgnoredGames: ["Desktop Goose"] },
     games: [
       { name: "Hollow Knight", steamId: 367520, kind: "conflict", localFiles: 4, localBytes: 812000, serverRev: 14, serverFrom: "HANZULAPTOP", conflict: { localUtc: hrs(26), remoteUtc: hrs(2), remoteMachine: "HANZULAPTOP" }, activityUtc: hrs(2) },
       { name: "Elden Ring", steamId: 1245620, kind: "synced", localFiles: 2, localBytes: 28400000, serverRev: 31, serverFrom: "HANZU", serverUtc: hrs(3), activityUtc: hrs(3) },
@@ -432,8 +490,10 @@ function mockState() {
       { name: "The Witcher 3: Wild Hunt", steamId: 292030, kind: "notInstalled", serverRev: 40 },
       { name: "Terraria", steamId: 105600, kind: "error", localFiles: 12, localBytes: 5400000, message: "Server error 507: server disk is full" },
       { name: "Undertale", steamId: 391540, kind: "pending", localFiles: 1, localBytes: 12000, message: "Uploads in a moment" },
-      { name: "Baldur's Gate 3", steamId: 1086940, kind: "steamCloud", message: "Steam Cloud already syncs this game", localFiles: 14, localBytes: 210000000 },
-      { name: "Cyberpunk 2077", steamId: 1091500, kind: "steamCloud", message: "Steam Cloud already syncs this game", localFiles: 40, localBytes: 96000000 },
+      { name: "Baldur's Gate 3", steamId: 1086940, kind: "launcherCloud", store: "steam", message: "Steam Cloud already syncs this game", localFiles: 14, localBytes: 210000000 },
+      { name: "Cyberpunk 2077", steamId: 1091500, kind: "launcherCloud", store: "steam", message: "Steam Cloud already syncs this game", localFiles: 40, localBytes: 96000000 },
+      { name: "Foundation", steamId: 690830, kind: "launcherCloud", store: "epic", message: "Epic Games cloud saves already syncs this game", localFiles: 5, localBytes: 3400000 },
+      { name: "Arclight", kind: "remote", serverFrom: "HANZU-PC", serverRev: 2, remoteFolders: ["C:\\Users\\Hanzu\\AppData\\Roaming\\Arclight\\saves"] },
       { name: "Minecraft Dungeons", kind: "synced", localFiles: 2, localBytes: 220000, serverRev: 6, serverFrom: "HANZULAPTOP", serverUtc: hrs(90) },
     ],
   };

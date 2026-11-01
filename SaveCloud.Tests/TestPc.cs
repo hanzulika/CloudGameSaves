@@ -14,7 +14,7 @@ namespace SaveCloud.Tests
     {
         public string Root { get; }
         public PathEnvironment Env { get; } = new PathEnvironment { IgnoreCase = false };
-        public AppConfig Config { get; } = new AppConfig { SkipSteamCloudGames = true };
+        public AppConfig Config { get; } = new AppConfig { SkipLauncherCloudGames = true };
         public GameScanner Scanner { get; }
         public SyncEngine Engine { get; }
         public HashSet<string> Running { get; } = new HashSet<string>();
@@ -73,8 +73,9 @@ namespace SaveCloud.Tests
 
         public ScanResult Rescan()
         {
-            var scan = Scanner.ScanAll(Manifest);
-            Engine.UpdateLocal(Manifest, scan);
+            var merged = GameScanner.WithCustomGames(Manifest, Config.CustomGames);
+            var scan = Scanner.ScanAll(merged);
+            Engine.UpdateLocal(merged, scan);
             return scan;
         }
 

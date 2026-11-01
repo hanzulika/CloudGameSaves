@@ -112,6 +112,31 @@ namespace SaveCloud.Core.Scan
             return Combine(parts);
         }
 
+        /// <summary>
+        /// Portable template for a real folder on this PC: the most specific known folder it's inside
+        /// ("C:\Users\me\AppData\Roaming\X" -> "&lt;winAppData&gt;/X"), otherwise the absolute path ("D:/Emu/saves").
+        /// </summary>
+        public string ToTemplate(string folder)
+        {
+            string full = folder.TrimEnd('\\', '/');
+            string best = null, bestRoot = null;
+            foreach (var token in PathEnvironment.FolderTokens)
+            {
+                if (!_env.Folders.TryGetValue(token, out var root) || string.IsNullOrEmpty(root)) continue;
+                root = root.TrimEnd('\\', '/');
+                bool inside = full.Equals(root, _env.Comparison) ||
+                              (full.StartsWith(root, _env.Comparison) && (full[root.Length] == '\\' || full[root.Length] == '/'));
+                if (inside && (bestRoot == null || root.Length > bestRoot.Length))
+                {
+                    best = token;
+                    bestRoot = root;
+                }
+            }
+            if (best == null) return full.Replace('\\', '/');
+            string rest = full.Substring(bestRoot.Length).Replace('\\', '/').TrimStart('/');
+            return rest.Length == 0 ? "<" + best + ">" : "<" + best + ">/" + rest;
+        }
+
         // ---- internals ---------------------------------------------------------------------------------
 
         private static List<string> Split(string pattern)

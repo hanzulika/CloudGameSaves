@@ -92,6 +92,19 @@ class ServerTest(unittest.TestCase):
         status, data = self.request("GET", "/api/v1/games/G-1/archive")
         self.assertEqual((200, b"hello"), (status, data))
 
+    def test_rules_of_hand_added_games_are_kept_and_validated(self):
+        meta = json.dumps({"Game": "Bloodborne", "Fingerprint": "f", "Files": [],
+                           "Rules": ["<winAppData>/shadPS4/user/savedata"]}).encode()
+        body = struct.pack(">I", len(meta)) + meta + b"zip"
+        status, head = self.request("PUT", "/api/v1/games/Bloodborne-1/revisions?expected=0", body,
+                                    {"Content-Length": str(len(body))})
+        self.assertEqual((200, ["<winAppData>/shadPS4/user/savedata"]), (status, head["Rules"]))
+        meta = json.dumps({"Game": "X", "Fingerprint": "f", "Rules": [1, 2]}).encode()
+        body = struct.pack(">I", len(meta)) + meta + b"zip"
+        status, head = self.request("PUT", "/api/v1/games/X-1/revisions?expected=0", body, {"Content-Length": str(len(body))})
+        self.assertEqual(200, status)
+        self.assertNotIn("Rules", head)   # malformed rules are dropped, not stored
+
     def test_stale_expected_revision_is_a_conflict(self):
         self.assertEqual(200, self.upload("G-1", 0)[0])
         self.assertEqual(200, self.upload("G-1", 1, content=b"two")[0])

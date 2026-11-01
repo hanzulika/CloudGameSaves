@@ -113,14 +113,14 @@ namespace SaveCloud.Core.Remote
         /// server moved past <paramref name="expectedRevision"/> (another PC uploaded first).
         /// </summary>
         public RemoteHead Publish(string game, long expectedRevision, string archivePath, string archiveSha256,
-                                  string fingerprint, List<RemoteFileEntry> files, int historyToKeep)
+                                  string fingerprint, List<RemoteFileEntry> files, int historyToKeep, List<string> rules = null)
         {
             using (Lock(game, TimeSpan.FromSeconds(60)))
-                return PublishLocked(game, expectedRevision, archivePath, archiveSha256, fingerprint, files, historyToKeep);
+                return PublishLocked(game, expectedRevision, archivePath, archiveSha256, fingerprint, files, historyToKeep, rules);
         }
 
         private RemoteHead PublishLocked(string game, long expectedRevision, string archivePath, string archiveSha256,
-                                         string fingerprint, List<RemoteFileEntry> files, int historyToKeep)
+                                         string fingerprint, List<RemoteFileEntry> files, int historyToKeep, List<string> rules)
         {
             string dir = Dir(game);
             var current = ReadHead(game);
@@ -144,6 +144,7 @@ namespace SaveCloud.Core.Remote
                 UploadedUtc = DateTime.UtcNow,
                 UploadedBy = Environment.MachineName,
                 Files = files,
+                Rules = rules,
             };
             using (var ms = new MemoryStream(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(head, Formatting.Indented))))
                 _t.Write(dir + "/head.json.part", ms);

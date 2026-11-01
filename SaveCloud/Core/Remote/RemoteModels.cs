@@ -35,6 +35,8 @@ namespace SaveCloud.Core.Remote
         /// <summary>Tailscale login that uploaded it (server-set; empty for folder storage).</summary>
         public string UploadedLogin { get; set; }
         public List<RemoteFileEntry> Files { get; set; } = new List<RemoteFileEntry>();
+        /// <summary>For games added by hand: the folder patterns, so other PCs can find the game without a manifest entry.</summary>
+        public List<string> Rules { get; set; }
 
         [JsonIgnore]
         public DateTime NewestFileUtc => Files.Count == 0 ? UploadedUtc : Files.Max(f => f.ModifiedUtc);
@@ -63,7 +65,7 @@ namespace SaveCloud.Core.Remote
         /// the server is no longer at <paramref name="expectedRevision"/> (another PC uploaded first).
         /// </summary>
         RemoteHead Publish(string game, long expectedRevision, string archivePath, string archiveSha256,
-                           string fingerprint, List<RemoteFileEntry> files, int historyToKeep);
+                           string fingerprint, List<RemoteFileEntry> files, int historyToKeep, List<string> rules = null);
         /// <summary>Downloads the archive of <paramref name="head"/> and verifies its checksum.</summary>
         void DownloadArchive(RemoteHead head, string localPath);
     }

@@ -20,10 +20,12 @@ namespace SaveCloud.Core.Manifest
     {
         public const string ManifestUrl = "https://raw.githubusercontent.com/mtkennerly/ludusavi-manifest/master/data/manifest.yaml";
         private static readonly TimeSpan RefreshAfter = TimeSpan.FromDays(3);
+        /// <summary>Bumped when the cached fields change; an older cache is refreshed but still used if offline.</summary>
+        private const int CurrentFormat = 2;
 
         private class CacheFile
         {
-            public int Format { get; set; } = 1;
+            public int Format { get; set; } = CurrentFormat;
             public string ETag { get; set; }
             public DateTime CheckedUtc { get; set; }
             public List<ManifestGame> Games { get; set; }
@@ -36,7 +38,7 @@ namespace SaveCloud.Core.Manifest
         public static async Task<List<ManifestGame>> LoadAsync(CancellationToken ct = default)
         {
             CacheFile cache = ReadCache();
-            if (cache != null && DateTime.UtcNow - cache.CheckedUtc < RefreshAfter)
+            if (cache != null && cache.Format == CurrentFormat && DateTime.UtcNow - cache.CheckedUtc < RefreshAfter)
                 return cache.Games;
 
             try
@@ -45,7 +47,7 @@ namespace SaveCloud.Core.Manifest
                 using (var req = new HttpRequestMessage(HttpMethod.Get, ManifestUrl))
                 {
                     req.Headers.UserAgent.ParseAdd("SaveCloud/2.0");
-                    if (cache?.ETag != null) req.Headers.TryAddWithoutValidation("If-None-Match", cache.ETag);
+                    if (cache?.ETag != null && cache.Format == CurrentFormat) req.Headers.TryAddWithoutValidation("If-None-Match", cache.ETag);
 
                     using (var resp = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false))
                     {
@@ -97,7 +99,7 @@ namespace SaveCloud.Core.Manifest
             {
                 if (!File.Exists(AppPaths.ManifestCache)) return null;
                 var cache = JsonConvert.DeserializeObject<CacheFile>(File.ReadAllText(AppPaths.ManifestCache));
-                return cache?.Games != null && cache.Format == 1 ? cache : null;
+                return cache?.Games != null ? cache : null;
             }
             catch (Exception ex)
             {
@@ -155,6 +157,7 @@ namespace SaveCloud.Core.Manifest
                     InstallDirs = g.InstallDir?.Keys.ToList() ?? new List<string>(),
                     SteamId = g.Steam?.Id,
                     SteamCloud = g.Cloud != null && g.Cloud.TryGetValue("steam", out var sc) && IsTrue(sc),
+                    CloudStores = g.Cloud?.Where(c => IsTrue(c.Value)).Select(c => c.Key).ToList() ?? new List<string>(),
                 };
 
                 foreach (var f in g.Files)

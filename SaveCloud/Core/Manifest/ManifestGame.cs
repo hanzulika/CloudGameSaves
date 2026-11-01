@@ -12,6 +12,10 @@ namespace SaveCloud.Core.Manifest
         public long? SteamId { get; set; }
         /// <summary>The game uses Steam Cloud when bought on Steam.</summary>
         public bool SteamCloud { get; set; }
+        /// <summary>Stores whose own cloud saves this game uses: steam, epic, gog, origin (EA), uplay (Ubisoft).</summary>
+        public List<string> CloudStores { get; set; } = new List<string>();
+        /// <summary>A game the user added by hand (not from the manifest).</summary>
+        public bool Custom { get; set; }
     }
 
     public class FileRule

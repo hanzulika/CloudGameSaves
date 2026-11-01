@@ -30,8 +30,11 @@
 
     <section class="banner" id="banner" hidden></section>
 
+    <section class="suggest" id="suggest" hidden></section>
+
     <nav class="toolbar">
       <div class="chips" id="chips" role="tablist"></div>
+      <button class="btn small" id="addGameBtn" type="button"><svg class="ico" viewBox="0 0 24 24"><use href="#i-plus"/></svg>Add a game</button>
       <label class="search">
         <svg class="ico" viewBox="0 0 24 24"><use href="#i-search"/></svg>
         <input id="search" type="search" placeholder="Search games" autocomplete="off">
@@ -65,7 +68,7 @@
       <section class="group">
         <h3>General</h3>
         <label class="toggle"><span><b>Start with Windows</b><small>Restores your newest saves every time you sign in.</small></span><input type="checkbox" data-setting="StartWithWindows"><i></i></label>
-        <label class="toggle"><span><b>Skip Steam Cloud games</b><small>Steam already syncs these; syncing twice can cause Steam conflict prompts.</small></span><input type="checkbox" data-setting="SkipSteamCloudGames"><i></i></label>
+        <label class="toggle"><span><b>Leave launcher-synced games to their launcher</b><small>Steam, Epic, GOG, EA and Ubisoft sync some games themselves. Syncing twice can make the launcher ask which save to keep.</small></span><input type="checkbox" data-setting="SkipLauncherCloudGames"><i></i></label>
         <label class="toggle"><span><b>Sync settings files too</b><small>Graphics and keybinds. Usually differ per PC, so off by default.</small></span><input type="checkbox" data-setting="IncludeConfigFiles"><i></i></label>
       </section>
 
@@ -74,6 +77,11 @@
         <p class="muted small">Steam, Epic, GOG, Program Files and any <code>X:\Games</code> folder are found automatically. Add other folders that contain installed games.</p>
         <ul class="list" id="roots"></ul>
         <button class="btn" id="addRoot" type="button"><svg class="ico" viewBox="0 0 24 24"><use href="#i-plus"/></svg>Add folder</button>
+      </section>
+
+      <section class="group">
+        <h3>Games you added</h3>
+        <ul class="list" id="customGames"></ul>
       </section>
 
       <section class="group">

@@ -22,10 +22,17 @@ namespace SaveCloud.Core
         /// <summary>Also sync files the manifest tags only as "config" (graphics/keybind settings). Off by default:
         /// those are usually PC-specific (resolution, GPU settings) and syncing them causes more harm than good.</summary>
         public bool IncludeConfigFiles { get; set; } = false;
-        /// <summary>Skip games that are installed through Steam AND use Steam Cloud, so two sync systems don't fight.</summary>
-        public bool SkipSteamCloudGames { get; set; } = true;
-        /// <summary>Steam Cloud games the user chose to sync with SaveCloud as well (exceptions to <see cref="SkipSteamCloudGames"/>).</summary>
-        public List<string> AlsoSyncSteamCloudGames { get; set; } = new List<string>();
+        /// <summary>Skip games installed through a launcher whose own cloud syncs them (Steam, Epic, GOG, EA, Ubisoft),
+        /// so two sync systems don't fight. Stored under its original name for older config files.</summary>
+        [JsonProperty("SkipSteamCloudGames")]
+        public bool SkipLauncherCloudGames { get; set; } = true;
+        /// <summary>Launcher-cloud games the user chose to sync with SaveCloud as well.</summary>
+        [JsonProperty("AlsoSyncSteamCloudGames")]
+        public List<string> AlsoSyncCloudGames { get; set; } = new List<string>();
+        /// <summary>Save folders the user added by hand or accepted from the suggestions.</summary>
+        public List<Scan.CustomGame> CustomGames { get; set; } = new List<Scan.CustomGame>();
+        /// <summary>Suggested folders (templates) the user said aren't games.</summary>
+        public List<string> HiddenSuggestions { get; set; } = new List<string>();
         /// <summary>Games whose saves exceed this are skipped (protects against manifest entries that match a whole install folder).</summary>
         public int MaxGameSizeMB { get; set; } = 512;
 

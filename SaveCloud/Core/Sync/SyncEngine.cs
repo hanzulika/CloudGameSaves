@@ -20,6 +20,8 @@ namespace SaveCloud.Core.Sync
         Deferred,
         /// <summary>Server copy needs the game's install folder, and the game isn't installed here.</summary>
         NotInstalled,
+        /// <summary>Added by hand on another PC; this PC syncs it only after the user approves its folder.</summary>
+        NotOnThisPc,
         /// <summary>Local saves disappeared; the server copy is kept and not deleted.</summary>
         LocalMissing,
         PendingUpload,
@@ -113,6 +115,9 @@ namespace SaveCloud.Core.Sync
             public long? SteamId { get; set; }
             /// <summary>A local save file, for "open save folder".</summary>
             public string SampleFile { get; set; }
+            /// <summary>For games added by hand on another PC: the folder rules to approve on this one.</summary>
+            public List<string> RemoteRules { get; set; }
+            public bool KnownHere { get; set; }
             public GameState State { get; set; }
             public GameSyncResult LastResult { get; set; }
         }
@@ -142,6 +147,8 @@ namespace SaveCloud.Core.Sync
                         ServerUploadedUtc = head?.UploadedUtc,
                         SteamId = local?.Manifest.SteamId ?? (_manifest.TryGetValue(n, out var mg) ? mg.SteamId : null),
                         SampleFile = local?.Files.FirstOrDefault()?.ActualPath,
+                        KnownHere = _manifest.ContainsKey(n),
+                        RemoteRules = _manifest.ContainsKey(n) || head == null ? null : RulesFromHead(head),
                         State = _state.Get(n),
                         LastResult = last,
                     };
@@ -246,7 +253,8 @@ namespace SaveCloud.Core.Sync
                         if (_isRunning(name)) return Record(Result(name, SyncAction.Deferred, "Close the game first"));
                         var head = store.ReadHead(name);
                         SetHead(name, head);
-                        var (mg, basePaths) = Locate(name, head);
+                        var (mg, basePaths) = Locate(name, head, out bool known);
+                        if (!known) return Record(Result(name, SyncAction.NotOnThisPc, "Add this game on this PC first"));
                         var local = _scanner.ScanGame(mg, basePaths);
 
                         if (keepLocal)
@@ -296,7 +304,10 @@ namespace SaveCloud.Core.Sync
 
         private GameSyncResult SyncOne(IRemoteStore store, string name, RemoteHead head, bool allowPush, bool allowPull)
         {
-            var (mg, basePaths) = Locate(name, head);
+            var (mg, basePaths) = Locate(name, head, out bool known);
+            // Never sync a folder this PC didn't choose: another PC (possibly another person, on a shared server)
+            // added this game by hand. The user approves its folder first.
+            if (!known) return Result(name, SyncAction.NotOnThisPc, $"Added on {head?.UploadedBy ?? "another PC"}");
             var local = _scanner.ScanGame(mg, basePaths);
             string L = local == null ? null : LocalFingerprint(local.Files);
             var gs = _state.Get(name);
@@ -345,7 +356,9 @@ namespace SaveCloud.Core.Sync
                 RemoteHead head;
                 try
                 {
-                    head = store.Publish(name, expectedRevision, zip, built.Sha256, built.Fingerprint, built.Files, _config.HistoryToKeep);
+                    // Hand-added games carry their folder rules so other PCs can find them without a manifest entry.
+                    var rules = local.Manifest.Custom ? local.Manifest.Files.Select(r => r.Pattern).ToList() : null;
+                    head = store.Publish(name, expectedRevision, zip, built.Sha256, built.Fingerprint, built.Files, _config.HistoryToKeep, rules);
                 }
                 catch (RevisionConflictException ex)
                 {
@@ -373,6 +386,17 @@ namespace SaveCloud.Core.Sync
         private GameSyncResult Pull(IRemoteStore store, string name, ManifestGame mg, List<string> basePaths,
                                     DetectedGame local, RemoteHead head)
         {
+            // Only write where this game's own rules point (see RuleMatcher).
+            var rules = mg.Files.Select(r => r.Pattern).ToList();
+            var names = mg.InstallDirs.Concat(new[] { mg.Name }).ToList();
+            var outside = head.Files.Where(f => !RuleMatcher.IsAllowed(f.Path, rules, names)).Select(f => f.Path).ToList();
+            if (outside.Count > 0)
+            {
+                Logger.Warn($"Refusing to restore {name} revision {head.Revision} from {head.UploadedBy}: files outside its save folders: " +
+                            string.Join(", ", outside.Take(5)));
+                return Result(name, SyncAction.Error, "The server copy has files outside this game's save folders, so it wasn't restored");
+            }
+
             // Check placement before downloading anything.
             foreach (var f in head.Files)
                 if (_scanner.Paths.Resolve(f.Path, basePaths) == null)
@@ -441,20 +465,42 @@ namespace SaveCloud.Core.Sync
 
         // ---- helpers -----------------------------------------------------------------------------------
 
+        /// <summary>Folder rules of a game added by hand elsewhere: its declared rules, or the folder its files share.</summary>
+        public static List<string> RulesFromHead(RemoteHead head)
+        {
+            if (head.Rules != null && head.Rules.Count > 0) return head.Rules.ToList();
+            var dirs = head.Files.Select(f => f.Path.Split('/').Reverse().Skip(1).Reverse().ToList()).Where(d => d.Count > 0).ToList();
+            if (dirs.Count == 0) return new List<string>();
+            var common = dirs[0];
+            foreach (var d in dirs.Skip(1))
+            {
+                int k = 0;
+                while (k < common.Count && k < d.Count && string.Equals(common[k], d[k], StringComparison.OrdinalIgnoreCase)) k++;
+                common = common.Take(k).ToList();
+            }
+            return common.Count >= 2 ? new List<string> { string.Join("/", common) } : new List<string>();
+        }
+
         /// <summary>Finds the manifest entry and install folders for a game. Games missing from the manifest (renamed
         /// upstream, or added by another PC with a newer manifest) fall back to the paths recorded on the server.</summary>
-        private (ManifestGame, List<string>) Locate(string name, RemoteHead head)
+        private (ManifestGame, List<string>) Locate(string name, RemoteHead head) => Locate(name, head, out _);
+
+        private (ManifestGame, List<string>) Locate(string name, RemoteHead head, out bool known)
         {
             Dictionary<string, ManifestGame> manifest;
             lock (_view) manifest = _manifest;
-            if (!manifest.TryGetValue(name, out var mg))
+            known = manifest.TryGetValue(name, out var mg);
+            if (!known)
             {
+                // A game added by hand on another PC: use its folder rules (or, from older uploads, the exact files).
+                var patterns = head?.Rules != null && head.Rules.Count > 0
+                    ? head.Rules
+                    : (head?.Files ?? new List<RemoteFileEntry>()).Select(f => f.Path).ToList();
                 mg = new ManifestGame
                 {
                     Name = name,
-                    Files = (head?.Files ?? new List<RemoteFileEntry>())
-                        .Select(f => new FileRule { Pattern = f.Path, IsSave = true })
-                        .ToList(),
+                    Custom = head?.Rules != null && head.Rules.Count > 0,
+                    Files = patterns.Select(p => new FileRule { Pattern = p, IsSave = true }).ToList(),
                 };
             }
             LastScan.InstallPaths.TryGetValue(name, out var basePaths);
