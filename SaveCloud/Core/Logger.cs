@@ -15,7 +15,8 @@ namespace SaveCloud.Core
         public static void Info(string message) => Write("INFO", message);
         public static void Warn(string message) => Write("WARN", message);
         public static void Error(string message) => Write("ERROR", message);
-        public static void Error(string message, Exception ex) => Write("ERROR", $"{message}: {ex.GetType().Name}: {ex.Message}");
+        /// <summary>Logs the full exception including the stack trace, so failures can be diagnosed from the log alone.</summary>
+        public static void Error(string message, Exception ex) => Write("ERROR", $"{message}: {ex}");
 
         private static void Write(string level, string message)
         {

@@ -66,6 +66,8 @@ const KIND = {
   notInstalled: { badge: "muted", icon: "i-pc",       label: "Not installed",   group: "waiting" },
   waiting:      { badge: "info",  icon: "i-sync",     label: "Waiting",         group: "waiting" },
   pending:      { badge: "info",  icon: "i-cloud-up", label: "Not uploaded yet", group: "waiting" },
+  steamCloud:   { badge: "muted", icon: "i-cloud-up", label: "Steam Cloud",     group: "skipped" },
+  tooLarge:     { badge: "muted", icon: "i-alert",    label: "Too large",       group: "skipped" },
 };
 const kindOf = g => KIND[g.kind] || KIND.waiting;
 
@@ -174,6 +176,10 @@ function renderBanner() {
   } else if (errors) {
     b.className = "banner bad";
     b.innerHTML = `${icon("i-alert")}<span class="grow"><b>${errors} ${errors === 1 ? "game" : "games"} couldn't sync.</b> SaveCloud will retry automatically.</span><button class="btn small" data-filter="attention">Show</button>`;
+  } else if (state.games.some(g => g.kind === "steamCloud") && state.settings?.SkipSteamCloudGames) {
+    const n = state.games.filter(g => g.kind === "steamCloud").length;
+    b.className = "banner info";
+    b.innerHTML = `${icon("i-cloud-up")}<span class="grow"><b>${n} Steam ${n === 1 ? "game is" : "games are"} left to Steam Cloud.</b> SaveCloud can sync ${n === 1 ? "it" : "them"} too. Steam may then occasionally ask which save to keep when you launch a game.</span><button class="btn small" data-filter="skipped">See them</button><button class="btn primary small" data-sync-steam="1">Sync them too</button>`;
   } else if (state.connection.state === "notAuthorized" && state.everConnected) {
     b.className = "banner";
     b.innerHTML = `${icon("i-alert")}<span class="grow">This server no longer accepts <b>${esc(state.connection.login)}</b>. Ask the owner to add it back.</span>`;
@@ -184,14 +190,14 @@ function renderBanner() {
 }
 
 function counts() {
-  const c = { all: state.games.length, attention: 0, synced: 0, waiting: 0 };
+  const c = { all: state.games.length, attention: 0, synced: 0, waiting: 0, skipped: 0 };
   for (const g of state.games) c[kindOf(g).group]++;
   return c;
 }
 
 function renderChips() {
   const c = counts();
-  const chips = [["all", "All"], ["attention", "Needs you"], ["synced", "Synced"], ["waiting", "Waiting"]];
+  const chips = [["all", "All"], ["attention", "Needs you"], ["synced", "Synced"], ["waiting", "Waiting"], ["skipped", "Not synced"]];
   $("chips").innerHTML = chips
     .filter(([k]) => k === "all" || c[k] || filter === k)
     .map(([k, label]) => `<button class="chip${k === "attention" ? " attn" : ""}" role="tab" aria-selected="${filter === k}" data-filter="${k}">${label}<span class="n">${c[k]}</span></button>`)
@@ -200,7 +206,7 @@ function renderChips() {
 
 function visibleGames() {
   const q = query.trim().toLowerCase();
-  const rank = g => ({ attention: 0, waiting: 2, synced: 1 }[kindOf(g).group]);
+  const rank = g => ({ attention: 0, synced: 1, waiting: 2, skipped: 3 }[kindOf(g).group]);
   return state.games
     .filter(g => filter === "all" || kindOf(g).group === filter)
     .filter(g => !q || g.name.toLowerCase().includes(q))
@@ -219,6 +225,9 @@ function card(g) {
   const details = [];
   if (g.localFiles) details.push(`${g.localFiles} ${g.localFiles === 1 ? "file" : "files"}`, size(g.localBytes));
   let extra = "";
+  if (g.kind === "steamCloud") {
+    extra = `<div class="choice one"><button data-also="${esc(g.name)}"><b>Also sync with SaveCloud</b><small>For copies not bought on Steam, or PCs without Steam</small></button></div>`;
+  }
   if (g.kind === "conflict" && g.conflict) {
     const localNewer = new Date(g.conflict.localUtc) > new Date(g.conflict.remoteUtc);
     extra = `<div class="choice">
@@ -302,6 +311,8 @@ document.addEventListener("click", e => {
   if (t.dataset.menu) { openMenu(t, t.dataset.menu); e.stopPropagation(); return; }
   if (t.dataset.unroot) { send("removeRoot", { path: t.dataset.unroot }); return; }
   if (t.dataset.unignore) { send("unignore", { game: t.dataset.unignore }); return; }
+  if (t.dataset.also) { send("alsoSync", { game: t.dataset.also }); return; }
+  if (t.dataset.syncSteam) { send("setSetting", { key: "SkipSteamCloudGames", value: false }); toast("Adding Steam Cloud games…"); return; }
   switch (t.id) {
     case "syncBtn": send("syncNow"); break;
     case "settingsBtn": case "conn": openDrawer(true); break;
@@ -421,6 +432,8 @@ function mockState() {
       { name: "The Witcher 3: Wild Hunt", steamId: 292030, kind: "notInstalled", serverRev: 40 },
       { name: "Terraria", steamId: 105600, kind: "error", localFiles: 12, localBytes: 5400000, message: "Server error 507: server disk is full" },
       { name: "Undertale", steamId: 391540, kind: "pending", localFiles: 1, localBytes: 12000, message: "Uploads in a moment" },
+      { name: "Baldur's Gate 3", steamId: 1086940, kind: "steamCloud", message: "Steam Cloud already syncs this game", localFiles: 14, localBytes: 210000000 },
+      { name: "Cyberpunk 2077", steamId: 1091500, kind: "steamCloud", message: "Steam Cloud already syncs this game", localFiles: 40, localBytes: 96000000 },
       { name: "Minecraft Dungeons", kind: "synced", localFiles: 2, localBytes: 220000, serverRev: 6, serverFrom: "HANZULAPTOP", serverUtc: hrs(90) },
     ],
   };

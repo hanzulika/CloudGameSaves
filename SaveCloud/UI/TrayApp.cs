@@ -337,10 +337,32 @@ namespace SaveCloud.UI
 
         private object BuildState()
         {
-            var games = (_engine?.Snapshot() ?? new List<SyncEngine.GameView>())
+            var views = (_engine?.Snapshot() ?? new List<SyncEngine.GameView>())
                 .Where(g => !(_config.IgnoredGames ?? new List<string>()).Contains(g.Name))
-                .Select(ToCard)
                 .ToList();
+            var games = views.Select(ToCard).ToList();
+            // Found but deliberately not synced: shown with the reason instead of silently missing.
+            var synced = new HashSet<string>(views.Select(v => v.Name));
+            foreach (var sk in _engine?.LastScan.SkippedGames ?? new List<SkippedGame>())
+            {
+                if (synced.Contains(sk.Name)) continue;
+                games.Add(new
+                {
+                    name = sk.Name,
+                    steamId = sk.SteamId,
+                    kind = sk.Reason == SkipReason.SteamCloud ? "steamCloud" : "tooLarge",
+                    message = sk.Reason == SkipReason.SteamCloud ? "Steam Cloud already syncs this game"
+                        : $"Saves are {sk.Bytes / (1024 * 1024)} MB, over the {_config.MaxGameSizeMB} MB limit",
+                    localFiles = sk.Files,
+                    localBytes = sk.Bytes,
+                    serverRev = (long?)null,
+                    serverFrom = (string)null,
+                    serverLogin = (string)null,
+                    serverUtc = (DateTime?)null,
+                    activityUtc = (DateTime?)null,
+                    conflict = (object)null,
+                });
+            }
             return new
             {
                 version = typeof(TrayApp).Assembly.GetName().Version.ToString(3),
@@ -429,6 +451,11 @@ namespace SaveCloud.UI
                     if (!_config.IgnoredGames.Contains(game)) _config.IgnoredGames.Add(game);
                     _config.Save();
                     Enqueue("Updating", () => Rescan());
+                    break;
+                case "alsoSync":
+                    if (!_config.AlsoSyncSteamCloudGames.Contains(game)) _config.AlsoSyncSteamCloudGames.Add(game);
+                    _config.Save();
+                    Enqueue($"Adding {game}", () => { Rescan(); SyncOne(game); });
                     break;
                 case "unignore":
                     _config.IgnoredGames.Remove(game);

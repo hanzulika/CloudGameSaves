@@ -19,12 +19,25 @@ namespace SaveCloud.Core.Scan
         public long TotalBytes => Files.Sum(f => f.Size);
     }
 
+    public enum SkipReason { SteamCloud, TooLarge }
+
+    public class SkippedGame
+    {
+        public string Name { get; set; }
+        public SkipReason Reason { get; set; }
+        public long? SteamId { get; set; }
+        public int Files { get; set; }
+        public long Bytes { get; set; }
+    }
+
     public class ScanResult
     {
         public List<DetectedGame> Games { get; } = new List<DetectedGame>();
         /// <summary>Every manifest game's install folders on this PC, including games with no saves yet.</summary>
         public Dictionary<string, List<string>> InstallPaths { get; } = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         public List<string> Skipped { get; } = new List<string>();
+        /// <summary>Games found on this PC but not synced, with the reason (shown in the UI, not hidden).</summary>
+        public List<SkippedGame> SkippedGames { get; } = new List<SkippedGame>();
     }
 
     /// <summary>Finds installed games and their save files using the Ludusavi manifest.</summary>
@@ -54,6 +67,7 @@ namespace SaveCloud.Core.Scan
             foreach (var kv in installs) result.InstallPaths[kv.Key] = kv.Value;
 
             var ignored = new HashSet<string>(_config.IgnoredGames ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+            var forced = new HashSet<string>(_config.AlsoSyncSteamCloudGames ?? new List<string>(), StringComparer.Ordinal);
 
             foreach (var game in manifest)
             {
@@ -65,9 +79,11 @@ namespace SaveCloud.Core.Scan
                 if (detected == null) continue;
 
                 if (_config.SkipSteamCloudGames && game.SteamCloud && game.SteamId.HasValue
-                    && _env.SteamInstalledAppIds.Contains(game.SteamId.Value))
+                    && _env.SteamInstalledAppIds.Contains(game.SteamId.Value)
+                    && !forced.Contains(game.Name))
                 {
                     result.Skipped.Add($"{game.Name}: installed through Steam with Steam Cloud");
+                    result.SkippedGames.Add(Skip(detected, SkipReason.SteamCloud));
                     continue;
                 }
 
@@ -75,6 +91,7 @@ namespace SaveCloud.Core.Scan
                 if (detected.TotalBytes > maxBytes)
                 {
                     result.Skipped.Add($"{game.Name}: saves are {detected.TotalBytes / (1024 * 1024)} MB (limit {_config.MaxGameSizeMB} MB)");
+                    result.SkippedGames.Add(Skip(detected, SkipReason.TooLarge));
                     continue;
                 }
                 result.Games.Add(detected);
@@ -86,6 +103,11 @@ namespace SaveCloud.Core.Scan
             Logger.Info($"Scan finished in {sw.ElapsedMilliseconds} ms: {result.Games.Count} games with saves, {result.Skipped.Count} skipped");
             return result;
         }
+
+        private static SkippedGame Skip(DetectedGame g, SkipReason why) => new SkippedGame
+        {
+            Name = g.Name, Reason = why, SteamId = g.Manifest.SteamId, Files = g.Files.Count, Bytes = g.TotalBytes,
+        };
 
         /// <summary>Re-scans one game (after it closes, or before/after a restore).</summary>
         public DetectedGame ScanGame(ManifestGame game, IList<string> basePaths)

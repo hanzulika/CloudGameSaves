@@ -17,6 +17,7 @@
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net481'">
     <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
     <Reference Include="System.Net.Http" />
   </ItemGroup>
 

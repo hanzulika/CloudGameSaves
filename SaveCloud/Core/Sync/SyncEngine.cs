@@ -493,7 +493,6 @@ namespace SaveCloud.Core.Sync
         private GameSyncResult Record(GameSyncResult r)
         {
             lock (_view) _last[r.Game] = r;
-            if (r.Action == SyncAction.Error) Logger.Error(r.ToString());
             return r;
         }
 
@@ -501,7 +500,10 @@ namespace SaveCloud.Core.Sync
             => new GameSyncResult { Game = game, Action = a, Message = msg };
 
         private static GameSyncResult Error(string game, Exception ex)
-            => Result(game, ex is LockTimeoutException ? SyncAction.Deferred : SyncAction.Error, ex.Message);
+        {
+            if (!(ex is LockTimeoutException)) Logger.Error($"Sync of {game} failed", ex);
+            return Result(game, ex is LockTimeoutException ? SyncAction.Deferred : SyncAction.Error, ex.Message);
+        }
 
         private static void TryDelete(string path)
         {

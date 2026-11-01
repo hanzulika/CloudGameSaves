@@ -29,7 +29,7 @@ namespace SaveCloud.Core.Sync
             {
                 foreach (var f in files)
                 {
-                    var entry = zip.CreateEntry(f.Template, CompressionLevel.Optimal);
+                    var entry = zip.CreateEntry(EntryName(f.Template), CompressionLevel.Optimal);
                     var mtime = File.GetLastWriteTimeUtc(f.ActualPath);
                     entry.LastWriteTime = ClampZipTime(mtime);
                     long size;
@@ -77,7 +77,7 @@ namespace SaveCloud.Core.Sync
                 foreach (var e in zip.Entries)
                 {
                     if (e.FullName.EndsWith("/")) continue;
-                    string target = resolve(e.FullName);
+                    string target = resolve(TemplateOf(e.FullName));
                     if (target == null) return null;
                     targets.Add((e, target));
                 }
@@ -91,7 +91,7 @@ namespace SaveCloud.Core.Sync
                         using (var src = entry.Open())
                         using (var dst = File.Create(tmp))
                             src.CopyTo(dst);
-                        staged.Add((tmp, target, times.TryGetValue(entry.FullName, out var t) ? t : entry.LastWriteTime.UtcDateTime));
+                        staged.Add((tmp, target, times.TryGetValue(TemplateOf(entry.FullName), out var t) ? t : entry.LastWriteTime.UtcDateTime));
                     }
                 }
                 catch
@@ -144,6 +144,19 @@ namespace SaveCloud.Core.Sync
                 TryDelete(old.FullName);
             return path;
         }
+
+        /// <summary>
+        /// Zip entry name for a template. .NET Framework rejects '&lt;' and '&gt;' in entry names ("Illegal characters
+        /// in path"), and templates start with tokens like &lt;winAppData&gt;, so those (and '%') are percent-escaped.
+        /// </summary>
+        public static string EntryName(string template)
+            => template.Replace("%", "%25").Replace("<", "%3C").Replace(">", "%3E");
+
+        /// <summary>Inverse of <see cref="EntryName"/>; names without escapes pass through unchanged.</summary>
+        public static string TemplateOf(string entryName)
+            => System.Text.RegularExpressions.Regex.Replace(entryName, "%(25|3C|3E)", m =>
+                m.Groups[1].Value == "25" ? "%" : m.Groups[1].Value == "3C" ? "<" : ">",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
         private static DateTimeOffset ClampZipTime(DateTime utc)
         {

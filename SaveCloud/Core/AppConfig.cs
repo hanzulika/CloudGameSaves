@@ -24,6 +24,8 @@ namespace SaveCloud.Core
         public bool IncludeConfigFiles { get; set; } = false;
         /// <summary>Skip games that are installed through Steam AND use Steam Cloud, so two sync systems don't fight.</summary>
         public bool SkipSteamCloudGames { get; set; } = true;
+        /// <summary>Steam Cloud games the user chose to sync with SaveCloud as well (exceptions to <see cref="SkipSteamCloudGames"/>).</summary>
+        public List<string> AlsoSyncSteamCloudGames { get; set; } = new List<string>();
         /// <summary>Games whose saves exceed this are skipped (protects against manifest entries that match a whole install folder).</summary>
         public int MaxGameSizeMB { get; set; } = 512;
 
