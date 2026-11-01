@@ -469,7 +469,8 @@ namespace SaveCloud.Core.Sync
         public static List<string> RulesFromHead(RemoteHead head)
         {
             if (head.Rules != null && head.Rules.Count > 0) return head.Rules.ToList();
-            var dirs = head.Files.Select(f => f.Path.Split('/').Reverse().Skip(1).Reverse().ToList()).Where(d => d.Count > 0).ToList();
+            var dirs = head.Files.Select(f => { var parts = f.Path.Split('/'); return parts.Take(parts.Length - 1).ToList(); })
+                .Where(d => d.Count > 0).ToList();
             if (dirs.Count == 0) return new List<string>();
             var common = dirs[0];
             foreach (var d in dirs.Skip(1))
